@@ -1,4 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PEP Worksheet Generator
+
+A web application for PEP Schoolv2 staff to generate printable math problem sets and answer keys.
+
+## Requirements
+
+- Node.js >= 18.18
+- npm
+
+## Setup
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Copy `.env.example` to `.env.local` and fill in the required values
+4. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+## Development
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run test` - Run tests
+- `npm run lint` - Run ESLint
+- `npm run format` - Format code with Prettier
+
+## Testing
+
+Tests are written using Jest and React Testing Library. Run tests with:
+```bash
+npm run test
+```
+
+Coverage threshold is set to 85% as per project requirements.
+
+## Contributing
+
+Follow the conventional commits specification for all commit messages:
+- feat: A new feature
+- fix: A bug fix
+- docs: Documentation only changes
+- style: Changes that do not affect the meaning of the code
+- refactor: A code change that neither fixes a bug nor adds a feature
+- perf: A code change that improves performance
+- test: Adding missing tests or correcting existing tests
+- build: Changes that affect the build system or external dependencies
+- ci: Changes to our CI configuration files and scripts
 
 ## Getting Started
 
