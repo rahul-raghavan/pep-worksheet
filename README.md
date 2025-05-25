@@ -123,3 +123,40 @@ console.log(answers);
 
 - The generator will sample unique questions matching your filters.
 - If the pool is too small, it will throw a `TooSmallPoolError` with details.
+
+## API Reference
+
+### POST /api/worksheet
+
+Generate a worksheet with filtered, unique, and optionally seeded questions.
+
+**Request Body:**
+```json
+{
+  "topics": ["Fractions", "Decimals"],
+  "minLevel": 2,
+  "maxLevel": 4,
+  "count": 10,
+  "seed": "optional-seed"
+}
+```
+
+**Response:**
+```json
+{
+  "problems": [
+    { "id": "...", "Topic": "Fractions", "Difficulty": 2, "Front": "...", "Back": "..." },
+    // ...
+  ],
+  "answers": [
+    { "id": "...", "Topic": "Fractions", "Difficulty": 2, "Front": "...", "Back": "..." },
+    // ...
+  ]
+}
+```
+
+- Returns 400 for invalid input (e.g. empty topics).
+- Returns 401 if not authenticated as a PEP teacher or Rahul.
+- Returns 422 if not enough questions match the filter.
+- Rate-limited to 5 requests/minute/user.
+- Only POST is allowed; other methods return 405.
