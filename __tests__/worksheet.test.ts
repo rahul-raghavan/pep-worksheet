@@ -23,6 +23,14 @@ jest.spyOn(NextResponse, 'json').mockImplementation((data, init) => {
   } as any;
 });
 
+// Helper to get a valid topic+level from the question bank
+function getValidRow() {
+  const file = path.join(process.cwd(), 'data', 'questions.json');
+  const allQuestions = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const q = allQuestions[0];
+  return { topic: q.Topic, count: 2, level: q.Difficulty };
+}
+
 describe('/api/worksheet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -30,10 +38,9 @@ describe('/api/worksheet', () => {
 
   it('valid request returns arrays of equal length `count`', async () => {
     auth.mockResolvedValue({ user: { email: VALID_EMAIL } });
+    const row = getValidRow();
     const body = {
-      rows: [{ topic: 'Fractions', count: 2 }],
-      minLevel: 1,
-      maxLevel: 5,
+      rows: [row],
       seed: 'test',
     };
     const req = new Request('http://localhost/api/worksheet', {
@@ -44,16 +51,15 @@ describe('/api/worksheet', () => {
     const res = await worksheetRoute.POST(req);
     const data = await res.json();
     expect(res.status).toBe(200);
-    expect(data.problems.length).toBe(2);
-    expect(data.answers.length).toBe(2);
+    expect(data.problems.length).toBe(row.count);
+    expect(data.answers.length).toBe(row.count);
   });
 
   it('missing auth cookie ⇒ 401', async () => {
     auth.mockResolvedValue(null);
+    const row = getValidRow();
     const body = {
-      rows: [{ topic: 'Fractions', count: 2 }],
-      minLevel: 1,
-      maxLevel: 5,
+      rows: [row],
     };
     const req = new Request('http://localhost/api/worksheet', {
         method: 'POST',
@@ -64,12 +70,10 @@ describe('/api/worksheet', () => {
     expect(res.status).toBe(401);
   });
 
-  it('bad body (e.g. empty topics) ⇒ 400', async () => {
+  it('bad body (e.g. empty rows) ⇒ 400', async () => {
     auth.mockResolvedValue({ user: { email: VALID_EMAIL } });
     const body = {
       rows: [],
-      minLevel: 1,
-      maxLevel: 5,
     };
     const req = new Request('http://localhost/api/worksheet', {
         method: 'POST',
@@ -83,9 +87,7 @@ describe('/api/worksheet', () => {
   it('TooSmallPoolError bubbles as 422 with error payload', async () => {
     auth.mockResolvedValue({ user: { email: VALID_EMAIL } });
     const body = {
-      rows: [{ topic: '__none__', count: 2 }],
-      minLevel: 1,
-      maxLevel: 1,
+      rows: [{ topic: '__none__', count: 2, level: 1 }],
     };
     const req = new Request('http://localhost/api/worksheet', {
         method: 'POST',

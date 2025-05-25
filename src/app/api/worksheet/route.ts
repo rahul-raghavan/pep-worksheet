@@ -12,9 +12,8 @@ const WorksheetSchema = z.object({
   rows: z.array(z.object({
     topic: z.string().min(1),
     count: z.number().int().min(1),
+    level: z.number().int().min(1).max(5),
   })).min(1),
-  minLevel: z.number().int().min(1).max(5),
-  maxLevel: z.number().int().min(1).max(5),
   seed: z.string().optional(),
 });
 
@@ -54,11 +53,7 @@ export async function POST(req: Request) {
   try {
     const { problems, answers } = generate(
       parse.data.rows,
-      {
-        minLevel: parse.data.minLevel as 1|2|3|4|5,
-        maxLevel: parse.data.maxLevel as 1|2|3|4|5,
-        seed: parse.data.seed,
-      }
+      { seed: parse.data.seed }
     );
     return NextResponse.json({ problems, answers });
   } catch (e) {

@@ -7,30 +7,28 @@ const allTopics = Array.from(new Set((questions as any[]).map(q => q.Topic))).so
 interface Row {
   topic: string;
   count: number;
+  level: number;
 }
 
 export default function BuilderClient({ email }: { email: string }) {
   const [rows, setRows] = useState<Row[]>([
-    { topic: allTopics[0] || '', count: 1 },
+    { topic: allTopics[0] || '', count: 1, level: 1 },
   ]);
-  const [minLevel, setMinLevel] = useState(1);
-  const [maxLevel, setMaxLevel] = useState(5);
   const [seed, setSeed] = useState('');
 
   const total = rows.reduce((sum, r) => sum + r.count, 0);
   const canAdd = rows.length < allTopics.length && total < 25;
   const canPreview =
     rows.length > 0 &&
-    rows.every(r => r.topic && r.count > 0) &&
+    rows.every(r => r.topic && r.count > 0 && r.level >= 1 && r.level <= 5) &&
     new Set(rows.map(r => r.topic)).size === rows.length &&
     total > 0 &&
-    total <= 25 &&
-    minLevel <= maxLevel;
+    total <= 25;
 
   function addRow() {
     const used = new Set(rows.map(r => r.topic));
     const next = allTopics.find(t => !used.has(t)) || '';
-    setRows([...rows, { topic: next, count: 1 }]);
+    setRows([...rows, { topic: next, count: 1, level: 1 }]);
   }
   function updateRow(i: number, row: Row) {
     setRows(rows.map((r, j) => (i === j ? row : r)));
@@ -43,12 +41,13 @@ export default function BuilderClient({ email }: { email: string }) {
     <div className="space-y-6">
       <div className="mb-2 text-gray-700">Welcome, {email}</div>
       <div className="rounded-lg border border-gray-200 bg-white p-6">
-        <div className="mb-4 font-semibold">Select Topics and Counts</div>
+        <div className="mb-4 font-semibold">Select Topics, Counts, and Levels</div>
         <table className="w-full mb-4">
           <thead>
             <tr className="text-left text-sm text-gray-500">
               <th>Topic</th>
               <th>Count</th>
+              <th>Level</th>
               <th></th>
             </tr>
           </thead>
@@ -82,6 +81,17 @@ export default function BuilderClient({ email }: { email: string }) {
                   />
                 </td>
                 <td>
+                  <select
+                    className="border rounded px-2 py-1"
+                    value={row.level}
+                    onChange={e => updateRow(i, { ...row, level: Number(e.target.value) })}
+                  >
+                    {[1, 2, 3, 4, 5].map(l => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                </td>
+                <td>
                   {rows.length > 1 && (
                     <button
                       className="text-xs text-red-500 hover:underline"
@@ -102,26 +112,6 @@ export default function BuilderClient({ email }: { email: string }) {
         >
           Add Topic
         </button>
-        <div className="mt-6 flex gap-4 items-center">
-          <label className="text-sm">Level:</label>
-          <input
-            type="number"
-            min={1}
-            max={maxLevel}
-            value={minLevel}
-            onChange={e => setMinLevel(Math.min(Number(e.target.value), maxLevel))}
-            className="border rounded px-2 py-1 w-12"
-          />
-          <span>to</span>
-          <input
-            type="number"
-            min={minLevel}
-            max={5}
-            value={maxLevel}
-            onChange={e => setMaxLevel(Math.max(Number(e.target.value), minLevel))}
-            className="border rounded px-2 py-1 w-12"
-          />
-        </div>
         <div className="mt-4 flex gap-4 items-center">
           <label className="text-sm">Seed (optional):</label>
           <input
