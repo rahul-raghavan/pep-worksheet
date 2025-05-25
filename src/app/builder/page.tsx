@@ -1,4 +1,5 @@
 import { auth, signOut } from '@/auth';
+import BuilderClient from './BuilderClient';
 
 export default async function Builder() {
   const session = await auth();
@@ -19,10 +20,7 @@ export default async function Builder() {
             </button>
           </form>
         </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <p>Welcome, {session?.user?.email}</p>
-          <p className="mt-2 text-sm text-gray-500">Builder UI coming soon...</p>
-        </div>
+        <BuilderClient email={session?.user?.email || ''} />
       </div>
     </main>
   );

@@ -31,10 +31,9 @@ describe('/api/worksheet', () => {
   it('valid request returns arrays of equal length `count`', async () => {
     auth.mockResolvedValue({ user: { email: VALID_EMAIL } });
     const body = {
-      topics: ['Fractions'],
+      rows: [{ topic: 'Fractions', count: 2 }],
       minLevel: 1,
       maxLevel: 5,
-      count: 2,
       seed: 'test',
     };
     const req = new Request('http://localhost/api/worksheet', {
@@ -52,10 +51,9 @@ describe('/api/worksheet', () => {
   it('missing auth cookie ⇒ 401', async () => {
     auth.mockResolvedValue(null);
     const body = {
-      topics: ['Fractions'],
+      rows: [{ topic: 'Fractions', count: 2 }],
       minLevel: 1,
       maxLevel: 5,
-      count: 2,
     };
     const req = new Request('http://localhost/api/worksheet', {
         method: 'POST',
@@ -69,10 +67,9 @@ describe('/api/worksheet', () => {
   it('bad body (e.g. empty topics) ⇒ 400', async () => {
     auth.mockResolvedValue({ user: { email: VALID_EMAIL } });
     const body = {
-      topics: [],
+      rows: [],
       minLevel: 1,
       maxLevel: 5,
-      count: 2,
     };
     const req = new Request('http://localhost/api/worksheet', {
         method: 'POST',
@@ -86,10 +83,9 @@ describe('/api/worksheet', () => {
   it('TooSmallPoolError bubbles as 422 with error payload', async () => {
     auth.mockResolvedValue({ user: { email: VALID_EMAIL } });
     const body = {
-      topics: ['__none__'],
+      rows: [{ topic: '__none__', count: 2 }],
       minLevel: 1,
       maxLevel: 1,
-      count: 2,
     };
     const req = new Request('http://localhost/api/worksheet', {
         method: 'POST',

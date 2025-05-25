@@ -9,10 +9,12 @@ const RATE_LIMIT = 5;
 const WINDOW_MS = 60 * 1000;
 
 const WorksheetSchema = z.object({
-  topics: z.array(z.string()).min(1),
+  rows: z.array(z.object({
+    topic: z.string().min(1),
+    count: z.number().int().min(1),
+  })).min(1),
   minLevel: z.number().int().min(1).max(5),
   maxLevel: z.number().int().min(1).max(5),
-  count: z.number().int().min(1),
   seed: z.string().optional(),
 });
 
@@ -50,11 +52,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid request', details: parse.error.errors }, { status: 400 });
   }
   try {
-    const { problems, answers } = generate({
-      ...parse.data,
-      minLevel: parse.data.minLevel as 1|2|3|4|5,
-      maxLevel: parse.data.maxLevel as 1|2|3|4|5,
-    });
+    const { problems, answers } = generate(
+      parse.data.rows,
+      {
+        minLevel: parse.data.minLevel as 1|2|3|4|5,
+        maxLevel: parse.data.maxLevel as 1|2|3|4|5,
+        seed: parse.data.seed,
+      }
+    );
     return NextResponse.json({ problems, answers });
   } catch (e) {
     if (e instanceof TooSmallPoolError) {
