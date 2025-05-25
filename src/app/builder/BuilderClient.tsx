@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import questions from '../../../data/questions.json';
+import { routeToPrint } from '../../utils/routeToPrint';
 
 const allTopics = Array.from(new Set((questions as any[]).map(q => q.Topic))).sort();
 
@@ -10,11 +11,22 @@ interface Row {
   level: number;
 }
 
+interface PreviewQuestion {
+  id: string;
+  Topic: string;
+  Difficulty: number;
+  Front: string;
+  Back: string;
+}
+
 export default function BuilderClient({ email }: { email: string }) {
   const [rows, setRows] = useState<Row[]>([
     { topic: allTopics[0] || '', count: 1, level: 1 },
   ]);
-  const [seed, setSeed] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewQuestions, setPreviewQuestions] = useState<PreviewQuestion[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const total = rows.reduce((sum, r) => sum + r.count, 0);
   const canAdd = rows.length < allTopics.length && total < 25;
@@ -37,11 +49,38 @@ export default function BuilderClient({ email }: { email: string }) {
     setRows(rows.filter((_, j) => j !== i));
   }
 
+  async function handlePreview() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/worksheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Failed to generate preview');
+        setPreviewQuestions([]);
+        setPreviewOpen(false);
+        return;
+      }
+      setPreviewQuestions(data.problems || []);
+      setPreviewOpen(true);
+    } catch (e: any) {
+      setError(e.message || 'Failed to generate preview');
+      setPreviewQuestions([]);
+      setPreviewOpen(false);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="mb-2 text-gray-700">Welcome, {email}</div>
       <div className="rounded-lg border border-gray-200 bg-white p-6">
-        <div className="mb-4 font-semibold">Select Topics, Counts, and Levels</div>
+        <div className="mb-4 font-semibold">Select Topics and Counts</div>
         <table className="w-full mb-4">
           <thead>
             <tr className="text-left text-sm text-gray-500">
@@ -112,29 +151,68 @@ export default function BuilderClient({ email }: { email: string }) {
         >
           Add Topic
         </button>
-        <div className="mt-4 flex gap-4 items-center">
-          <label className="text-sm">Seed (optional):</label>
-          <input
-            type="text"
-            value={seed}
-            onChange={e => setSeed(e.target.value)}
-            className="border rounded px-2 py-1"
-            placeholder="Leave blank for random"
-          />
-        </div>
         <div className="mt-6">
           <button
             className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-            disabled={!canPreview}
-            // onClick={...} // Preview logic to be added next
+            disabled={!canPreview || loading}
+            onClick={handlePreview}
           >
-            Preview
+            {loading ? 'Loading...' : 'Preview'}
           </button>
         </div>
         <div className="mt-2 text-xs text-gray-500">
           Total questions: {total} (max 25)
         </div>
+        {error && (
+          <div className="mt-4 text-sm text-red-600">{error}</div>
+        )}
       </div>
+      {/* Modal Preview */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="modal-content bg-white rounded-lg shadow-lg max-w-lg w-full p-6 relative flex flex-col" style={{ maxHeight: '80vh' }}>
+            <button
+              className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
+              onClick={() => setPreviewOpen(false)}
+              aria-label="Close preview"
+            >
+              ×
+            </button>
+            <div className="mb-4 font-semibold text-lg">Worksheet Preview</div>
+            <div className="modal-questions flex-1 overflow-y-auto mb-6 pr-2">
+              <ol start={1} className="list-decimal list-inside flex flex-col gap-2">
+                {previewQuestions.map((q, i) => (
+                  <li key={q.id}>
+                    <span className="font-medium">{q.Front}</span>
+                    <br />
+                    <span className="text-xs text-gray-500">Topic: {q.Topic} &nbsp;|&nbsp; Level: {q.Difficulty}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="modal-footer flex justify-end gap-4">
+              <button
+                className="px-4 py-2 bg-blue-600 text-white rounded"
+                onClick={() => routeToPrint(previewQuestions, 'problems')}
+              >
+                Print / Save as PDF
+              </button>
+              <button
+                className="px-4 py-2 bg-gray-700 text-white rounded"
+                onClick={() => routeToPrint(previewQuestions, 'answers')}
+              >
+                Print Answers
+              </button>
+              <button
+                className="px-4 py-2 ml-2 text-gray-600 border border-gray-300 rounded"
+                onClick={() => setPreviewOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

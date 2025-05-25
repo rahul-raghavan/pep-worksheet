@@ -53,7 +53,9 @@ export async function POST(req: Request) {
   try {
     const { problems, answers } = generate(
       parse.data.rows,
-      { seed: parse.data.seed }
+      {
+        seed: parse.data.seed,
+      }
     );
     return NextResponse.json({ problems, answers });
   } catch (e) {

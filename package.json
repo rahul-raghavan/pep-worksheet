@@ -12,17 +12,16 @@
     "test:coverage": "jest --coverage",
     "format": "prettier --write .",
     "prepare": "husky install",
-    "sync": "ts-node scripts/sync.ts"
+    "sync": "ts-node scripts/sync.ts",
+    "print:dev": "next dev -p 3000"
   },
   "dependencies": {
-    "@react-pdf/renderer": "^3.4.5",
     "dotenv": "^16.5.0",
     "googleapis": "^149.0.0",
     "next": "15.1.8",
     "next-auth": "^5.0.0-beta.28",
-    "pdf-lib": "^1.17.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
     "seedrandom": "^3.0.5",
     "zod": "^3.25.28"
   },

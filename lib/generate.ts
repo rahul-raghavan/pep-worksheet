@@ -35,7 +35,7 @@ function getQuestions(): Question[] {
 
 export function generateRows(
   rows: { topic: string; count: number; level: number }[],
-  opts: GenerateRowsOptions = {}
+  opts: GenerateRowsOptions
 ): { problems: Question[]; answers: Question[] } {
   if (!Array.isArray(rows) || rows.length === 0) throw new Error('rows required');
   for (const r of rows) {

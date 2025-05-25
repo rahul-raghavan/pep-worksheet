@@ -11,71 +11,68 @@ describe('generateRows()', () => {
 
   it('returns correct count per topic and total', () => {
     const topics = Array.from(new Set(allQuestions.map(q => q.Topic))).slice(0, 2);
-    const levels = topics.map(t => allQuestions.find(q => q.Topic === t)?.Difficulty || 1);
     const rows = [
-      { topic: topics[0], count: 2, level: levels[0] },
-      { topic: topics[1], count: 3, level: levels[1] },
+      { topic: topics[0], count: 2 },
+      { topic: topics[1], count: 3 },
     ];
-    const { problems } = generateRows(rows, { seed: 'abc' });
+    const minLevel = 1, maxLevel = 5;
+    const { problems } = generateRows(rows, { minLevel, maxLevel, seed: 'abc' });
     expect(problems.length).toBe(5);
     expect(problems.filter(q => q.Topic === topics[0]).length).toBe(2);
     expect(problems.filter(q => q.Topic === topics[1]).length).toBe(3);
   });
 
-  it('enforces uniqueness across all topics/levels', () => {
-    // Find a topic+level with 3 or fewer questions
+  it('enforces uniqueness across all topics', () => {
+    // Find a topic with 3 or fewer questions
     let found = false;
     for (const topic of Array.from(new Set(allQuestions.map(q => q.Topic)))) {
-      for (const level of [1, 2, 3, 4, 5]) {
-        const pool = allQuestions.filter(q => q.Topic === topic && q.Difficulty === level);
-        if (pool.length > 1 && pool.length <= 3) {
-          // Request more than available by splitting across rows
-          const rows = [
-            { topic, count: Math.floor(pool.length / 2) + 1, level },
-            { topic, count: Math.ceil(pool.length / 2) + 1, level },
-          ];
-          expect(() => generateRows(rows, { seed: 'abc' })).toThrow(TooSmallPoolError);
-          found = true;
-          break;
-        }
+      const pool = allQuestions.filter(q => q.Topic === topic);
+      if (pool.length > 1 && pool.length <= 3) {
+        // Request more than available by splitting across rows
+        const rows = [
+          { topic, count: Math.floor(pool.length / 2) + 1 },
+          { topic, count: Math.ceil(pool.length / 2) + 1 },
+        ];
+        const minLevel = 1, maxLevel = 5;
+        expect(() => generateRows(rows, { minLevel, maxLevel, seed: 'abc' })).toThrow(TooSmallPoolError);
+        found = true;
+        break;
       }
-      if (found) break;
     }
     if (!found) {
-      // Fallback: forcibly test with a fake topic/level
+      // Fallback: forcibly test with a fake topic
       expect(() => generateRows([
-        { topic: '__none__', count: 2, level: 1 },
-        { topic: '__none__', count: 2, level: 1 },
-      ], { seed: 'abc' })).toThrow(TooSmallPoolError);
+        { topic: '__none__', count: 2 },
+        { topic: '__none__', count: 2 },
+      ], { minLevel: 1, maxLevel: 1 })).toThrow(TooSmallPoolError);
     }
   });
 
   it('throws if any count < 1 or total > 25', () => {
     const topics = Array.from(new Set(allQuestions.map(q => q.Topic))).slice(0, 2);
-    const levels = topics.map(t => allQuestions.find(q => q.Topic === t)?.Difficulty || 1);
-    expect(() => generateRows([{ topic: topics[0], count: 0, level: levels[0] }], { seed: 'abc' })).toThrow();
+    expect(() => generateRows([{ topic: topics[0], count: 0 }], { minLevel: 1, maxLevel: 5 })).toThrow();
     expect(() => generateRows([
-      { topic: topics[0], count: 20, level: levels[0] },
-      { topic: topics[1], count: 10, level: levels[1] },
-    ], { seed: 'abc' })).toThrow();
+      { topic: topics[0], count: 20 },
+      { topic: topics[1], count: 10 },
+    ], { minLevel: 1, maxLevel: 5 })).toThrow();
   });
 
   it('is seed-deterministic and unique', () => {
     const topics = Array.from(new Set(allQuestions.map(q => q.Topic))).slice(0, 2);
-    const levels = topics.map(t => allQuestions.find(q => q.Topic === t)?.Difficulty || 1);
     const rows = [
-      { topic: topics[0], count: 2, level: levels[0] },
-      { topic: topics[1], count: 2, level: levels[1] },
+      { topic: topics[0], count: 2 },
+      { topic: topics[1], count: 2 },
     ];
-    const a = generateRows(rows, { seed: 'abc' });
-    const b = generateRows(rows, { seed: 'abc' });
-    const c = generateRows(rows, { seed: 'xyz' });
+    const minLevel = 1, maxLevel = 5;
+    const a = generateRows(rows, { minLevel, maxLevel, seed: 'abc' });
+    const b = generateRows(rows, { minLevel, maxLevel, seed: 'abc' });
+    const c = generateRows(rows, { minLevel, maxLevel, seed: 'xyz' });
     expect(a.problems.map(q => q.id)).toEqual(b.problems.map(q => q.id));
     expect(a.problems.map(q => q.id)).not.toEqual(c.problems.map(q => q.id));
   });
 
-  it('throws TooSmallPoolError for a specific topic+level', () => {
-    // Find a topic+level with only 1 question
+  it('throws TooSmallPoolError for a specific topic', () => {
+    // Find a topic with only 1 question
     let found = false;
     for (const q of allQuestions) {
       const matches = allQuestions.filter(
@@ -83,11 +80,11 @@ describe('generateRows()', () => {
       );
       if (matches.length === 1) {
         const rows = [
-          { topic: q.Topic, count: 2, level: q.Difficulty },
+          { topic: q.Topic, count: 2 },
         ];
-        expect(() => generateRows(rows, { seed: 'abc' })).toThrow(TooSmallPoolError);
+        expect(() => generateRows(rows, { minLevel: q.Difficulty, maxLevel: q.Difficulty })).toThrow(TooSmallPoolError);
         try {
-          generateRows(rows, { seed: 'abc' });
+          generateRows(rows, { minLevel: q.Difficulty, maxLevel: q.Difficulty });
         } catch (e) {
           if (e instanceof TooSmallPoolError) {
             expect(e.topic).toBe(q.Topic);
@@ -101,7 +98,7 @@ describe('generateRows()', () => {
     }
     if (!found) {
       // Fallback: forcibly test the error
-      expect(() => generateRows([{ topic: '__none__', count: 2, level: 1 }], { seed: 'abc' })).toThrow(TooSmallPoolError);
+      expect(() => generateRows([{ topic: '__none__', count: 2 }], { minLevel: 1, maxLevel: 1 })).toThrow(TooSmallPoolError);
     }
   });
 }); 
