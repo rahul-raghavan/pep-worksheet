@@ -160,3 +160,28 @@ Generate a worksheet with filtered, unique, and optionally seeded questions.
 - Returns 422 if not enough questions match the filter.
 - Rate-limited to 5 requests/minute/user.
 - Only POST is allowed; other methods return 405.
+
+## PDF engine
+
+The PDF engine uses @react-pdf/renderer to generate single-page A4 worksheets with adaptive spacing.
+
+**Programmatic usage:**
+```ts
+import { renderPDF } from './lib/renderPDF';
+import { SheetPDFProps } from './components/SheetPDF';
+
+const props: SheetPDFProps = {
+  title: 'PEP Schoolv2 | Problem Set | Name: ____',
+  generatedOn: new Date().toISOString(),
+  questions: [/* ... */],
+  mode: 'problems',
+};
+
+const buffer = await renderPDF(props); // returns a PDF Buffer
+```
+
+- The PDF will always fit on a single A4 page (≤25 questions).
+- Problems mode omits answers; answers mode includes them.
+
+**Testing:**
+- Run `npm run test:pdf` to run the manual PDF integration test (requires Node, not Jest).

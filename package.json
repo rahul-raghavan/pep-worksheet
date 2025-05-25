@@ -15,10 +15,12 @@
     "sync": "ts-node scripts/sync.ts"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^3.4.5",
     "dotenv": "^16.5.0",
     "googleapis": "^149.0.0",
     "next": "15.1.8",
     "next-auth": "^5.0.0-beta.28",
+    "pdf-lib": "^1.17.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "seedrandom": "^3.0.5",
