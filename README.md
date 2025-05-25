@@ -101,3 +101,25 @@ To manually update the local question bank from Google Sheets:
 3. This will fetch, validate, and write the latest questions to `data/questions.json`.
 
 For automated weekly sync, see `.github/workflows/weekly-sync.yml`.
+
+## Programmatic usage
+
+You can use the core generator utility in your own scripts:
+
+```ts
+import { generate } from './lib/generate';
+
+const { problems, answers } = generate({
+  topics: ['Fractions', 'Decimals'],
+  minLevel: 2,
+  maxLevel: 4,
+  count: 10,
+  seed: 'optional-seed', // for deterministic output
+});
+
+console.log(problems);
+console.log(answers);
+```
+
+- The generator will sample unique questions matching your filters.
+- If the pool is too small, it will throw a `TooSmallPoolError` with details.
