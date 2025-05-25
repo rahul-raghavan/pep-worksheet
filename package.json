@@ -11,13 +11,17 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "format": "prettier --write .",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "sync": "ts-node scripts/sync.ts"
   },
   "dependencies": {
+    "dotenv": "^16.5.0",
+    "googleapis": "^149.0.0",
     "next": "15.1.8",
     "next-auth": "^5.0.0-beta.28",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^3.25.28"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -37,6 +41,7 @@
     "prettier": "^3.5.3",
     "prettier-plugin-tailwindcss": "^0.6.11",
     "tailwindcss": "^3.4.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }

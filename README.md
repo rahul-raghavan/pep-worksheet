@@ -85,3 +85,19 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Manual Sync
+
+To manually update the local question bank from Google Sheets:
+
+1. Ensure your `.env.local` contains:
+   - `GOOGLE_SHEETS_ID`
+   - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+   - `GOOGLE_PRIVATE_KEY`
+2. Run:
+   ```bash
+   npm run sync
+   ```
+3. This will fetch, validate, and write the latest questions to `data/questions.json`.
+
+For automated weekly sync, see `.github/workflows/weekly-sync.yml`.
