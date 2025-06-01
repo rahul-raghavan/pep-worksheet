@@ -9700,5 +9700,12 @@
     "Difficulty": 5,
     "Front": "A shape is dilated by -1 centered at origin. What is this equivalent to?",
     "Back": "Answer: Rotation of 180° about the origin. ( (x,y) → (-x,-y) ). Hint: Scale factor -1 inverts the shape through the origin."
+  },
+  {
+    "id": "1387",
+    "Topic": "Translations & Similarity",
+    "Difficulty": 1,
+    "Front": "Test question",
+    "Back": "Test Answer"
   }
 ]
