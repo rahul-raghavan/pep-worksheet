@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 function isSuperAdmin(email: string | undefined | null) {
   return (
     !!email &&
-    (email === 'rahul.glass@gmail.com' || email.endsWith('@pepschoolv2.com'))
+    (email === 'rahul.glass@gmail.com' || email.endsWith('@pepschoolv2.com') || email.endsWith('@accelschool.in'))
   );
 }
 

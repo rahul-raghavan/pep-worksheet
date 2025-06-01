@@ -18,7 +18,7 @@ const WorksheetSchema = z.object({
 });
 
 function isAllowedUser(email: string | undefined | null) {
-  return !!email && (email.endsWith('@pepschoolv2.com') || email === 'rahul.glass@gmail.com');
+  return !!email && (email.endsWith('@pepschoolv2.com') || email.endsWith('@accelschool.in') || email === 'rahul.glass@gmail.com');
 }
 
 export async function POST(req: Request) {

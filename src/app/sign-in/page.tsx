@@ -49,7 +49,7 @@ export default async function SignIn() {
         </form>
 
         <p className="text-sm text-gray-500">
-          Only @pepschoolv2.com emails are allowed
+          Only @pepschoolv2.com and @accelschool.in emails are allowed
         </p>
       </div>
     </main>

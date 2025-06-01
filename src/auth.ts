@@ -39,7 +39,7 @@ export const {
       if (account?.provider === 'google') {
         const email = profile?.email;
         return (
-          email?.endsWith('@pepschoolv2.com') || email === 'rahul.glass@gmail.com'
+          email?.endsWith('@pepschoolv2.com') || email?.endsWith('@accelschool.in') || email === 'rahul.glass@gmail.com'
         );
       }
       return false;
