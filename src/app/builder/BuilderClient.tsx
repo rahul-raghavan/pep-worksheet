@@ -3,7 +3,12 @@ import React, { useState } from 'react';
 import questions from '../../../data/questions.json';
 import { routeToPrint } from '../../utils/routeToPrint';
 
-const allTopics = Array.from(new Set((questions as unknown[]).map(q => (q as any).Topic))).sort();
+interface Question {
+  Topic: string;
+  // Add other fields if needed
+}
+
+const allTopics = Array.from(new Set((questions as Question[]).map(q => q.Topic))).sort();
 
 interface Row {
   topic: string;
