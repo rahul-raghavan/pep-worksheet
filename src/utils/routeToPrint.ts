@@ -1,4 +1,4 @@
-export function routeToPrint(questions: any[], mode: 'problems' | 'answers' = 'problems') {
+export function routeToPrint(questions: unknown[], mode: 'problems' | 'answers' = 'problems') {
   if (typeof window === 'undefined') return;
   try {
     sessionStorage.setItem('worksheet', JSON.stringify(questions));

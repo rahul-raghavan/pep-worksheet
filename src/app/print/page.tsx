@@ -38,7 +38,7 @@ export default function PrintPage() {
           : 'PEP Schoolv2 | Problem Set | Name: ____________'}
       </h1>
       <ol className="questions">
-        {questions.map((q, i) => (
+        {questions.map((q) => (
           <li key={q.id}>
             {mode === 'answers' ? q.Back : q.Front}
           </li>

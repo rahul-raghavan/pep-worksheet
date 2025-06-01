@@ -2,10 +2,6 @@ import { fetchAndSyncQuestions } from '@/utils/syncQuestions';
 import { auth } from '@/auth';
 import { NextResponse } from 'next/server';
 
-const SUPER_ADMINS = [
-  'rahul.glass@gmail.com',
-];
-
 function isSuperAdmin(email: string | undefined | null) {
   return (
     !!email &&
@@ -13,7 +9,7 @@ function isSuperAdmin(email: string | undefined | null) {
   );
 }
 
-export async function POST(req: Request) {
+export async function POST() {
   const session = await auth();
   const email = session?.user?.email;
   if (!isSuperAdmin(email)) {
@@ -22,8 +18,8 @@ export async function POST(req: Request) {
   try {
     const rows = await fetchAndSyncQuestions();
     return NextResponse.json({ ok: true, rows });
-  } catch (error: any) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'An error occurred' }, { status: 500 });
   }
 }
 

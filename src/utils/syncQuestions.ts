@@ -1,12 +1,11 @@
 import { google } from 'googleapis';
 import { QuestionSchema, Question } from '../types/question';
-import { z } from 'zod';
 import fs from 'fs/promises';
 import path from 'path';
 
 const SHEET_ID = process.env.GOOGLE_SHEETS_ID;
 const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\n/g, '\n');
 
 if (!SHEET_ID || !SERVICE_ACCOUNT_EMAIL || !PRIVATE_KEY) {
   throw new Error('Missing Google Sheets env vars');

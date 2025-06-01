@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import questions from '../../../data/questions.json';
 import { routeToPrint } from '../../utils/routeToPrint';
 
-const allTopics = Array.from(new Set((questions as any[]).map(q => q.Topic))).sort();
+const allTopics = Array.from(new Set((questions as unknown[]).map(q => (q as any).Topic))).sort();
 
 interface Row {
   topic: string;
@@ -181,7 +181,7 @@ export default function BuilderClient({ email }: { email: string }) {
             <div className="mb-4 font-semibold text-lg">Worksheet Preview</div>
             <div className="modal-questions flex-1 overflow-y-auto mb-6 pr-2">
               <ol start={1} className="list-decimal list-inside flex flex-col gap-2">
-                {previewQuestions.map((q, i) => (
+                {previewQuestions.map((q) => (
                   <li key={q.id}>
                     <span className="font-medium">{q.Front}</span>
                     <br />
