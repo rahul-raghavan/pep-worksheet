@@ -72,8 +72,12 @@ export default function BuilderClient({ email }: { email: string }) {
       }
       setPreviewQuestions(data.problems || []);
       setPreviewOpen(true);
-    } catch (e: any) {
-      setError(e.message || 'Failed to generate preview');
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        setError(e.message || 'Failed to generate preview');
+      } else {
+        setError('Failed to generate preview');
+      }
       setPreviewQuestions([]);
       setPreviewOpen(false);
     } finally {
