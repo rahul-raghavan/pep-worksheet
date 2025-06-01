@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from 'react';
 import questions from '../../../data/questions.json';
+import { routeToPrint } from '../../utils/routeToPrint';
 
 const allTopics = Array.from(new Set((questions as any[]).map(q => q.Topic))).sort();
 
@@ -169,7 +170,7 @@ export default function BuilderClient({ email }: { email: string }) {
       {/* Modal Preview */}
       {previewOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-lg shadow-lg max-w-lg w-full p-6 relative">
+          <div className="modal-content bg-white rounded-lg shadow-lg max-w-lg w-full p-6 relative flex flex-col" style={{ maxHeight: '80vh' }}>
             <button
               className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
               onClick={() => setPreviewOpen(false)}
@@ -178,17 +179,32 @@ export default function BuilderClient({ email }: { email: string }) {
               ×
             </button>
             <div className="mb-4 font-semibold text-lg">Worksheet Preview</div>
-            <ol className="list-decimal pl-5 space-y-2">
-              {previewQuestions.map((q, i) => (
-                <li key={q.id}>
-                  <div className="font-medium">{q.Front}</div>
-                  <div className="text-xs text-gray-500">Topic: {q.Topic} &nbsp;|&nbsp; Level: {q.Difficulty}</div>
-                </li>
-              ))}
-            </ol>
-            <div className="mt-6 flex justify-end">
+            <div className="modal-questions flex-1 overflow-y-auto mb-6 pr-2">
+              <ol start={1} className="list-decimal list-inside flex flex-col gap-2">
+                {previewQuestions.map((q, i) => (
+                  <li key={q.id}>
+                    <span className="font-medium">{q.Front}</span>
+                    <br />
+                    <span className="text-xs text-gray-500">Topic: {q.Topic} &nbsp;|&nbsp; Level: {q.Difficulty}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="modal-footer flex justify-end gap-4">
               <button
                 className="px-4 py-2 bg-blue-600 text-white rounded"
+                onClick={() => routeToPrint(previewQuestions, 'problems')}
+              >
+                Print / Save as PDF
+              </button>
+              <button
+                className="px-4 py-2 bg-gray-700 text-white rounded"
+                onClick={() => routeToPrint(previewQuestions, 'answers')}
+              >
+                Print Answers
+              </button>
+              <button
+                className="px-4 py-2 ml-2 text-gray-600 border border-gray-300 rounded"
                 onClick={() => setPreviewOpen(false)}
               >
                 Close

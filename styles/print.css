@@ -1,0 +1,67 @@
+/* Print CSS for /print page only */
+@page {
+  size: A4 portrait;
+  margin: 12mm;
+}
+
+html, body {
+  background: #fff;
+  font: 14pt/1.4 'Inter', serif;
+  height: 100%;
+  min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+body, #__next, .print-root {
+  height: 100%;
+  min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.print-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 16pt;
+  margin-bottom: 8mm;
+  flex: 0 0 auto;
+}
+
+.questions {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  justify-content: space-evenly;
+  list-style: decimal inside;
+  padding: 0;
+  margin: 0 0 8mm 0;
+  min-height: 0;
+}
+
+.questions > li {
+  break-inside: avoid;
+}
+
+.questions > li:last-child:after {
+  content: '';
+  flex-grow: 1;
+  display: block;
+}
+
+.footer {
+  text-align: center;
+  font-size: 10pt;
+  flex: 0 0 auto;
+  margin-top: 0;
+  margin-bottom: 0;
+} 

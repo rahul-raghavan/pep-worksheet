@@ -161,27 +161,26 @@ Generate a worksheet with filtered, unique, and optionally seeded questions.
 - Rate-limited to 5 requests/minute/user.
 - Only POST is allowed; other methods return 405.
 
-## PDF engine
+## Print / Save as PDF Workflow
 
-The PDF engine uses @react-pdf/renderer to generate single-page A4 worksheets with adaptive spacing.
+You can print or save worksheets as PDF directly from your browser:
 
-**Programmatic usage:**
-```ts
-import { renderPDF } from './lib/renderPDF';
-import { SheetPDFProps } from './components/SheetPDF';
+1. Go to the Worksheet Builder and select your topics, counts, and levels.
+2. Click Preview to see the worksheet.
+3. In the preview modal, click **Print / Save as PDF** (for problems) or **Print Answers** (for answers).
+4. This opens a new tab with a print-optimized A4 page. Use your browser's Print dialog (Cmd+P or Ctrl+P) to print or save as PDF.
 
-const props: SheetPDFProps = {
-  title: 'PEP Schoolv2 | Problem Set | Name: ____',
-  generatedOn: new Date().toISOString(),
-  questions: [/* ... */],
-  mode: 'problems',
-};
+![Print Preview Screenshot](docs/print-preview.png)
 
-const buffer = await renderPDF(props); // returns a PDF Buffer
+- The print page is always single-page A4 portrait, with adaptive spacing.
+- No special PDF engine or downloads required—just use your browser's built-in print/save.
+
+### Local Development
+
+To run the print workflow locally:
+
+```bash
+npm run print:dev
 ```
 
-- The PDF will always fit on a single A4 page (≤25 questions).
-- Problems mode omits answers; answers mode includes them.
-
-**Testing:**
-- Run `npm run test:pdf` to run the manual PDF integration test (requires Node, not Jest).
+This starts the dev server on port 3000 for easy access to the print preview.
