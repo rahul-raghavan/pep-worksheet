@@ -7003,8 +7003,8 @@
     "id": "1001",
     "Topic": "Angles & Polygons",
     "Difficulty": 3,
-    "Front": "In the figure, line AB",
-    "Back": "line CD, and a transversal intersects them. If one interior angle is 70°, find the alternate interior angle and the corresponding angle."
+    "Front": "How many diagonals does a hexagon have?",
+    "Back": "Answer: 9. Hint: The formula for finding the number of diagonals in a hexagon is, Number of diagonals in a polygon = 1/2 × n × (n-3)"
   },
   {
     "id": "1002",
