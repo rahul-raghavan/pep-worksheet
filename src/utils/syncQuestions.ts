@@ -4,19 +4,16 @@ import fs from 'fs/promises';
 import path from 'path';
 
 const SHEET_ID = process.env.GOOGLE_SHEETS_ID;
-const SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-const PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\n/g, '\n');
 
-if (!SHEET_ID || !SERVICE_ACCOUNT_EMAIL || !PRIVATE_KEY) {
-  throw new Error('Missing Google Sheets env vars');
+if (!SHEET_ID) {
+  throw new Error('Missing Google Sheets env var: GOOGLE_SHEETS_ID');
 }
 
 const questionsRange = 'A1:E'; // Assumes columns: id, Topic, Difficulty, Front, Back
 
 export async function fetchAndSyncQuestions() {
-  const auth = new google.auth.JWT({
-    email: SERVICE_ACCOUNT_EMAIL,
-    key: PRIVATE_KEY,
+  // Use default credentials from GOOGLE_APPLICATION_CREDENTIALS
+  const auth = new google.auth.GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
   const sheets = google.sheets({ version: 'v4', auth });
