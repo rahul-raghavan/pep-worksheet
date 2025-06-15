@@ -25,10 +25,8 @@ jobs:
         env:
           SERVICE_ACCOUNT_KEY_JSON: ${{ secrets.SERVICE_ACCOUNT_KEY_JSON }}
 
-      - name: Set env vars from service account
-        run: |
-          echo "GOOGLE_SERVICE_ACCOUNT_EMAIL=$(jq -r .client_email service-account.json)" >> $GITHUB_ENV
-          echo "GOOGLE_PRIVATE_KEY=$(jq -r .private_key service-account.json | awk '{printf "%s\\n", $0}')" >> $GITHUB_ENV
+      - name: Set GOOGLE_APPLICATION_CREDENTIALS
+        run: echo "GOOGLE_APPLICATION_CREDENTIALS=$PWD/service-account.json" >> $GITHUB_ENV
 
       - name: Set Google Sheets ID
         run: echo "GOOGLE_SHEETS_ID=${{ secrets.GOOGLE_SHEETS_ID }}" >> $GITHUB_ENV

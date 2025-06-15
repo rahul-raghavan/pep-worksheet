@@ -41,4 +41,4 @@ export async function fetchAndSyncQuestions() {
   const outPath = path.join(process.cwd(), 'data', 'questions.json');
   await fs.writeFile(outPath, JSON.stringify(parsed, null, 2));
   return parsed.length;
-} 
+}
