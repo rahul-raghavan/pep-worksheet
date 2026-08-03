@@ -61,11 +61,11 @@ Successful worksheet-pack generations can be recorded in Supabase. Previews and 
 
 ```text
 SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=YOUR-SERVICE-ROLE-KEY
+SUPABASE_SECRET_KEY=YOUR-SERVER-ONLY-SECRET-KEY
 PRIVATE_ADMIN_EMAILS=rahul@pepschoolv2.com
 ```
 
-The service-role key must never use a `NEXT_PUBLIC_` prefix. The event table has RLS enabled and grants no browser access to ordinary authenticated or anonymous clients. Only the server writes events and reads the private report.
+Use a Supabase Secret key beginning `sb_secret_...`. A legacy `service_role` JWT may instead be supplied as `SUPABASE_SERVICE_ROLE_KEY`; never put the public anon/publishable key in either variable. Privileged keys must never use a `NEXT_PUBLIC_` prefix. The event table has RLS enabled and grants no browser access to ordinary authenticated or anonymous clients. Only the server writes events and reads the private report.
 
 The private tracker is available at `/admin/usage` to the configured administrator emails. A visible status distinguishes a working connection with zero downloads from missing configuration or a failed Supabase query. Tracking failures do not block a teacher from receiving a completed worksheet pack.
 

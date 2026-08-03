@@ -68,7 +68,7 @@ export default async function UsagePage() {
           <section className={`usage-health usage-health-${report.status}`}>
             <strong>{report.status === 'not_configured' ? 'Tracking setup required' : 'Tracking connection needs attention'}</strong>
             <p>{report.detail}</p>
-            <small>Downloads still work when tracking is unavailable. Apply the supplied Supabase migration and check the production environment variables.</small>
+            <small>Downloads still work when tracking is unavailable. Keep the event table private: never grant SELECT access to anon or authenticated browser roles.</small>
           </section>
         )}
 

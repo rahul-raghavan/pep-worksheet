@@ -4,6 +4,7 @@ import { composeWeeklyWorksheet } from '@/lib/worksheet/compose';
 import { WORKSHEET_PRESETS } from '@/lib/worksheet/catalog';
 import {
   describeProblemSet,
+  loadUsageReport,
   summarizeUsageEvents,
   type WorksheetDownloadEvent,
 } from '@/lib/usage';
@@ -90,5 +91,55 @@ describe('privacy-minimal worksheet usage reporting', () => {
       expect.objectContaining({ id: 'custom', downloads: 1 }),
       expect.objectContaining({ id: 'weekly-cumulative', downloads: 1 }),
     ]));
+  });
+});
+
+describe('Supabase usage-tracking configuration', () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.SUPABASE_SECRET_KEY;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    delete process.env.SUPABASE_ANON_KEY;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    process.env.SUPABASE_URL = 'https://example.supabase.co';
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    jest.restoreAllMocks();
+  });
+
+  it('rejects a legacy anon key without querying the private event table', async () => {
+    const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    process.env.SUPABASE_SERVICE_ROLE_KEY = `${encode({ alg: 'HS256' })}.${encode({ role: 'anon' })}.signature`;
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+
+    const report = await loadUsageReport();
+
+    expect(report.status).toBe('failed');
+    expect(report.detail).toContain('public Supabase anon/publishable key');
+    expect(report.detail).toContain('Do not grant this table to anon');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('uses a new Supabase secret key without a Bearer header', async () => {
+    process.env.SUPABASE_SECRET_KEY = 'sb_secret_server_only_test';
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+
+    const report = await loadUsageReport();
+
+    expect(report.status).toBe('connected');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/rest/v1/worksheet_download_events'),
+      expect.objectContaining({
+        headers: { apikey: 'sb_secret_server_only_test' },
+      }),
+    );
   });
 });

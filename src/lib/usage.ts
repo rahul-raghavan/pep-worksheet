@@ -91,11 +91,73 @@ const WorksheetDownloadEventSchema = z.object({
   created_at: z.string().datetime(),
 });
 
-function supabaseConfig(): { url: string; serviceRoleKey: string } | null {
+type SupabaseConfigResult =
+  | { status: 'ready'; url: string; privilegedKey: string; useBearerToken: boolean }
+  | { status: 'not_configured' | 'invalid'; detail: string };
+
+function legacyJwtRole(key: string): string | undefined {
+  const parts = key.split('.');
+  if (parts.length !== 3) return undefined;
+
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { role?: unknown };
+    return typeof payload.role === 'string' ? payload.role : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function publicKeyConfigurationDetail(): string {
+  return 'The server key in Vercel is a public Supabase anon/publishable key. Replace it with a server-only Secret key (sb_secret_...) in SUPABASE_SECRET_KEY, or a legacy service_role key in SUPABASE_SERVICE_ROLE_KEY, then redeploy. Do not grant this table to anon.';
+}
+
+function supabaseConfig(): SupabaseConfigResult {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) return null;
-  return { url: url.replace(/\/$/, ''), serviceRoleKey };
+  const privilegedKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !privilegedKey) {
+    return {
+      status: 'not_configured',
+      detail: 'Add SUPABASE_URL and a server-only SUPABASE_SECRET_KEY (or legacy SUPABASE_SERVICE_ROLE_KEY) in Vercel, then redeploy.',
+    };
+  }
+
+  const configuredPublicKeys = [
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    process.env.SUPABASE_ANON_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  ].filter((value): value is string => Boolean(value));
+  const role = legacyJwtRole(privilegedKey);
+  if (
+    privilegedKey.startsWith('sb_publishable_')
+    || configuredPublicKeys.includes(privilegedKey)
+    || role === 'anon'
+    || role === 'authenticated'
+  ) {
+    return { status: 'invalid', detail: publicKeyConfigurationDetail() };
+  }
+
+  return {
+    status: 'ready',
+    url: url.replace(/\/$/, ''),
+    privilegedKey,
+    // Supabase's newer sb_secret_ keys are sent only as an API key. Legacy
+    // service_role JWTs also need the Bearer header.
+    useBearerToken: !privilegedKey.startsWith('sb_secret_'),
+  };
+}
+
+function supabaseHeaders(config: Extract<SupabaseConfigResult, { status: 'ready' }>): Record<string, string> {
+  return {
+    apikey: config.privilegedKey,
+    ...(config.useBearerToken ? { Authorization: `Bearer ${config.privilegedKey}` } : {}),
+  };
+}
+
+function supabaseFailureDetail(status: number, body: string): string {
+  if (status === 401 && (/grant select.*anon/i.test(body) || /permission denied.*worksheet_download_events/i.test(body))) {
+    return publicKeyConfigurationDetail();
+  }
+  return `Supabase returned ${status}: ${body.slice(0, 300)}`;
 }
 
 function applicationVersion(): string {
@@ -141,8 +203,11 @@ export async function recordWorksheetDownload(input: {
   teacherEmail: string;
 }): Promise<UsageTrackingResult> {
   const config = supabaseConfig();
-  if (!config) {
-    return { status: 'not_configured', detail: 'Supabase usage tracking is not configured.' };
+  if (config.status !== 'ready') {
+    return {
+      status: config.status === 'invalid' ? 'failed' : 'not_configured',
+      detail: config.detail,
+    };
   }
 
   const summary = describeProblemSet(input.manifest);
@@ -166,8 +231,7 @@ export async function recordWorksheetDownload(input: {
     const response = await fetch(`${config.url}/rest/v1/${EVENT_TABLE}`, {
       method: 'POST',
       headers: {
-        apikey: config.serviceRoleKey,
-        Authorization: `Bearer ${config.serviceRoleKey}`,
+        ...supabaseHeaders(config),
         'Content-Type': 'application/json',
         Prefer: 'return=minimal',
       },
@@ -175,7 +239,7 @@ export async function recordWorksheetDownload(input: {
       cache: 'no-store',
     });
     if (!response.ok) {
-      const detail = `Supabase returned ${response.status}: ${(await response.text()).slice(0, 300)}`;
+      const detail = supabaseFailureDetail(response.status, await response.text());
       console.error('worksheet_download_tracking_failed', { detail, manifestId: input.manifest.manifestId });
       return { status: 'failed', detail };
     }
@@ -280,7 +344,12 @@ export function summarizeUsageEvents(events: WorksheetDownloadEvent[]): UsageRep
 
 export async function loadUsageReport(): Promise<UsageReport> {
   const config = supabaseConfig();
-  if (!config) return emptyReport('not_configured', 'Add the Supabase URL and service-role key to enable download tracking.');
+  if (config.status !== 'ready') {
+    return emptyReport(
+      config.status === 'invalid' ? 'failed' : 'not_configured',
+      config.detail,
+    );
+  }
 
   const fields = [
     'id', 'user_id', 'teacher_email', 'event_type', 'tool_mode', 'manifest_id',
@@ -292,15 +361,12 @@ export async function loadUsageReport(): Promise<UsageReport> {
     const response = await fetch(
       `${config.url}/rest/v1/${EVENT_TABLE}?select=${fields}&order=created_at.desc&limit=5000`,
       {
-        headers: {
-          apikey: config.serviceRoleKey,
-          Authorization: `Bearer ${config.serviceRoleKey}`,
-        },
+        headers: supabaseHeaders(config),
         cache: 'no-store',
       },
     );
     if (!response.ok) {
-      const detail = `Supabase returned ${response.status}: ${(await response.text()).slice(0, 300)}`;
+      const detail = supabaseFailureDetail(response.status, await response.text());
       console.error('worksheet_usage_report_failed', { detail });
       return emptyReport('failed', detail);
     }
