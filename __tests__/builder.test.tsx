@@ -9,6 +9,9 @@ describe('weekly worksheet teacher workflow', () => {
     render(<BuilderClient email="teacher@pepschoolv2.com" />);
     expect(screen.getByRole('heading', { name: /build this week/i })).toBeInTheDocument();
     expect(screen.getByDisplayValue('12')).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton')).toHaveAttribute('max', '12');
+    expect(screen.getByRole('button', { name: '+' })).toBeDisabled();
+    expect(screen.getByText(/choose 8–12 questions/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /choose what to revisit/i })).toBeInTheDocument();
     expect(screen.queryByText(/choose a starting point/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /preview student pdf/i })).toBeDisabled();

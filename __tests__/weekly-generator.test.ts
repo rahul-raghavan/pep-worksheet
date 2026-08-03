@@ -25,6 +25,7 @@ describe('weekly worksheet composer', () => {
     expect(manifest.recipe.selections).toHaveLength(6);
     expect(manifest.questionPages).toHaveLength(2);
     expect(manifest.questionPages.flat()).toHaveLength(12);
+    expect(manifest.questionPages[0].length).toBeGreaterThanOrEqual(manifest.questionPages[1].length);
     for (const selection of manifest.recipe.selections) {
       expect(manifest.questions.filter((question) => question.familyId === selection.skillId)).toHaveLength(2);
     }
@@ -64,10 +65,30 @@ describe('weekly worksheet composer', () => {
   it('rejects a worksheet whose working-space requirements exceed two pages', () => {
     const recipe = defaultRecipe('too-large');
     recipe.selections = [
-      { skillId: 'long-division', band: 'stretch', style: 'applied', count: 20 },
+      { skillId: 'long-division', band: 'stretch', style: 'applied', count: 12 },
     ];
-    recipe.totalQuestions = 20;
+    recipe.totalQuestions = 12;
     expect(() => composeWeeklyWorksheet(recipe)).toThrow(LayoutCapacityError);
+  });
+
+  it('caps new worksheets at twelve questions', () => {
+    const recipe = defaultRecipe('thirteen-questions');
+    recipe.selections = [
+      { skillId: 'hcf', selectionType: 'skill', band: 'core', style: 'direct', count: 13 },
+    ];
+    recipe.totalQuestions = 13;
+    expect(() => composeWeeklyWorksheet(recipe)).toThrow(/less than or equal to 12/i);
+  });
+
+  it('fills page one before leaving spare working room on page two', () => {
+    const recipe = defaultRecipe('eight-applied-ratio-questions');
+    recipe.selections = [
+      { skillId: 'percentages-proportion', selectionType: 'family', band: 'core', style: 'mixed', count: 8 },
+    ];
+    recipe.totalQuestions = 8;
+    const manifest = composeWeeklyWorksheet(recipe);
+    expect(manifest.questionPages[0]).toHaveLength(6);
+    expect(manifest.questionPages[1]).toHaveLength(2);
   });
 
   it('keeps written-operation practice substantial and word-problem meanings exact', () => {

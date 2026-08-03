@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, rm, writeFile } from 'fs/promises';
 import path from 'path';
 import { composeWeeklyWorksheet } from '../src/lib/worksheet/compose';
 import { renderPdfDocuments } from '../src/lib/worksheet/pdf';
@@ -63,12 +63,12 @@ const papers: ReviewPaper[] = [
     },
   },
   {
-    slug: '04-broad-stretch-direct-16q',
+    slug: '04-broad-stretch-direct-12q',
     recipe: {
       schemaVersion: 'weekly-worksheet-recipe-v1',
       title: 'Weekly Mathematics Practice',
       groupLabel: 'Extension Group',
-      totalQuestions: 16,
+      totalQuestions: 12,
       seed: 'review-broad-stretch-2026-08',
       selections: [
         { skillId: 'place-value-rounding', band: 'stretch', style: 'direct', count: 2 },
@@ -77,8 +77,19 @@ const papers: ReviewPaper[] = [
         { skillId: 'fraction-add-subtract', band: 'stretch', style: 'direct', count: 2 },
         { skillId: 'decimal-operations', band: 'stretch', style: 'direct', count: 2 },
         { skillId: 'scientific-notation', band: 'stretch', style: 'direct', count: 2 },
-        { skillId: 'integer-operations', band: 'stretch', style: 'direct', count: 2 },
-        { skillId: 'intro-equations', band: 'stretch', style: 'direct', count: 2 },
+      ],
+    },
+  },
+  {
+    slug: '05-percentages-proportion-mixed-8q',
+    recipe: {
+      schemaVersion: 'weekly-worksheet-recipe-v1',
+      title: 'Weekly Mathematics Practice',
+      groupLabel: 'Percentage Review Group',
+      totalQuestions: 8,
+      seed: 'review-percentages-proportion-mixed-2026-08',
+      selections: [
+        { skillId: 'percentages-proportion', selectionType: 'family', band: 'core', style: 'mixed', count: 8 },
       ],
     },
   },
@@ -86,6 +97,7 @@ const papers: ReviewPaper[] = [
 
 async function main() {
   const outputDirectory = path.join(process.cwd(), 'output', 'review-pdfs');
+  await rm(outputDirectory, { recursive: true, force: true });
   await mkdir(outputDirectory, { recursive: true });
 
   const manifests = papers.map((paper) => ({

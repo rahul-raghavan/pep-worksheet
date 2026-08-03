@@ -19,35 +19,47 @@ export const SkillSelectionSchema = z.object({
   count: z.number().int().min(1).max(20),
 });
 
-export const WeeklyWorksheetRecipeSchema = z
-  .object({
-    schemaVersion: z.literal('weekly-worksheet-recipe-v1'),
-    subjectPackId: z.string().min(1).default('pep-elementary-mathematics'),
-    title: z.string().trim().min(1).max(80),
-    groupLabel: z.string().trim().max(60).optional(),
-    startingPointId: z.string().trim().min(1).max(60).optional(),
-    totalQuestions: z.number().int().min(8).max(20),
-    selections: z.array(SkillSelectionSchema).min(1).max(8),
-    seed: z.string().min(1).max(120),
-  })
-  .superRefine((recipe, ctx) => {
-    const skillIds = recipe.selections.map((selection) => selection.skillId);
-    if (new Set(skillIds).size !== skillIds.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['selections'],
-        message: 'Choose each skill only once.',
-      });
-    }
-    const allocated = recipe.selections.reduce((sum, selection) => sum + selection.count, 0);
-    if (allocated !== recipe.totalQuestions) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['totalQuestions'],
-        message: `Question counts add to ${allocated}, not ${recipe.totalQuestions}.`,
-      });
-    }
-  });
+// Keep the former upper bound only for parsing immutable sheets that teachers
+// already downloaded. New composition uses WeeklyWorksheetRecipeSchema below.
+const StoredWeeklyWorksheetRecipeSchema = z.object({
+  schemaVersion: z.literal('weekly-worksheet-recipe-v1'),
+  subjectPackId: z.string().min(1).default('pep-elementary-mathematics'),
+  title: z.string().trim().min(1).max(80),
+  groupLabel: z.string().trim().max(60).optional(),
+  startingPointId: z.string().trim().min(1).max(60).optional(),
+  totalQuestions: z.number().int().min(8).max(20),
+  selections: z.array(SkillSelectionSchema).min(1).max(8),
+  seed: z.string().min(1).max(120),
+});
+
+function validateRecipe(
+  recipe: z.infer<typeof StoredWeeklyWorksheetRecipeSchema>,
+  ctx: z.RefinementCtx,
+) {
+  const skillIds = recipe.selections.map((selection) => selection.skillId);
+  if (new Set(skillIds).size !== skillIds.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['selections'],
+      message: 'Choose each skill only once.',
+    });
+  }
+  const allocated = recipe.selections.reduce((sum, selection) => sum + selection.count, 0);
+  if (allocated !== recipe.totalQuestions) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['totalQuestions'],
+      message: `Question counts add to ${allocated}, not ${recipe.totalQuestions}.`,
+    });
+  }
+}
+
+export const WeeklyWorksheetRecipeSchema = StoredWeeklyWorksheetRecipeSchema
+  .extend({ totalQuestions: z.number().int().min(8).max(12) })
+  .superRefine(validateRecipe);
+
+const HistoricalWeeklyWorksheetRecipeSchema = StoredWeeklyWorksheetRecipeSchema
+  .superRefine(validateRecipe);
 
 export const GeneratedQuestionSchema = z.object({
   id: z.string().min(1),
@@ -78,7 +90,9 @@ export const WeeklyWorksheetManifestSchema = z.object({
   libraryVersion: z.string().min(1),
   seed: z.string().min(1),
   manifestId: z.string().min(1),
-  recipe: WeeklyWorksheetRecipeSchema,
+  // Existing downloaded manifests remain reproducible even though new sheets
+  // are now intentionally capped at twelve questions.
+  recipe: HistoricalWeeklyWorksheetRecipeSchema,
   questions: z.array(GeneratedQuestionSchema).min(8).max(20),
   questionPages: z.tuple([z.array(z.string()).min(1), z.array(z.string()).min(1)]),
 });

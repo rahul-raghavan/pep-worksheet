@@ -19,11 +19,14 @@ import {
   type WeeklyWorksheetRecipe,
 } from './schema';
 
-export const GENERATOR_VERSION = '2026.08.2';
+export const GENERATOR_VERSION = '2026.08.3';
 export const LIBRARY_VERSION = MATHEMATICS_PACK.version;
 
 const FIRST_PAGE_CAPACITY = 208;
 const SECOND_PAGE_CAPACITY = 224;
+// Keep page 1 visually continuous. Leave a little safety headroom for browser
+// font and millimetre rounding, and let page 2 absorb the spare space.
+const FIRST_PAGE_TARGET = FIRST_PAGE_CAPACITY * 0.95;
 const SPACE_COST: Record<ResponseSpace, number> = {
   compact: 18,
   standard: 28,
@@ -124,14 +127,22 @@ function effectiveStyle(style: QuestionStyle, occurrence: number, seed: string):
 function assignPages(questions: GeneratedQuestion[]): [string[], string[]] {
   const costs = questions.map((question) => SPACE_COST[question.responseSpace]);
   const estimatedSpace = costs.reduce((sum, cost) => sum + cost, 0);
-  let best: { split: number; balance: number } | null = null;
+  let best: { split: number; distanceFromFirstPageTarget: number } | null = null;
 
   for (let split = 1; split < questions.length; split += 1) {
+    // A two-page weekly sheet should not strand a single question on page 2.
+    if (questions.length - split < 2) continue;
     const first = costs.slice(0, split).reduce((sum, cost) => sum + cost, 0);
     const second = estimatedSpace - first;
     if (first <= FIRST_PAGE_CAPACITY && second <= SECOND_PAGE_CAPACITY) {
-      const balance = Math.abs(first - second);
-      if (!best || balance < best.balance) best = { split, balance };
+      const distanceFromFirstPageTarget = Math.abs(first - FIRST_PAGE_TARGET);
+      if (
+        !best
+        || distanceFromFirstPageTarget < best.distanceFromFirstPageTarget
+        || (distanceFromFirstPageTarget === best.distanceFromFirstPageTarget && split > best.split)
+      ) {
+        best = { split, distanceFromFirstPageTarget };
+      }
     }
   }
 

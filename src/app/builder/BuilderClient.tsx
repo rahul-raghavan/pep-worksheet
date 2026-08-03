@@ -106,7 +106,7 @@ export default function BuilderClient({ email }: { email: string }) {
     && selections.length <= 8
     && new Set(selections.map(selectionKey)).size === selections.length
     && totalQuestions >= 8
-    && totalQuestions <= 20
+    && totalQuestions <= 12
     && allocatedTotal === totalQuestions;
 
   const visibleFamilies = useMemo(() => {
@@ -168,7 +168,7 @@ export default function BuilderClient({ email }: { email: string }) {
   }
 
   function changeTotal(nextTotal: number) {
-    const clamped = Math.max(8, Math.min(20, nextTotal));
+    const clamped = Math.max(8, Math.min(12, nextTotal));
     setTotalQuestions(clamped);
     setSelections((current) => rebalance(current, clamped));
     invalidate();
@@ -263,10 +263,11 @@ export default function BuilderClient({ email }: { email: string }) {
 
   function loadRecipe(saved: WeeklyWorksheetManifest, exact: boolean) {
     const nextSelections = normalizedSelections(saved.recipe.selections);
+    const nextTotal = exact ? saved.recipe.totalQuestions : Math.min(12, saved.recipe.totalQuestions);
     setTitle(saved.recipe.title);
     setGroupLabel(saved.recipe.groupLabel ?? '');
-    setTotalQuestions(saved.recipe.totalQuestions);
-    setSelections(nextSelections);
+    setTotalQuestions(nextTotal);
+    setSelections(exact ? nextSelections : rebalance(nextSelections, nextTotal));
     setManifest(exact ? saved : null);
     setError(null);
     plannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -416,10 +417,10 @@ export default function BuilderClient({ email }: { email: string }) {
                 <span>Total questions</span>
                 <div className="number-control">
                   <button type="button" onClick={() => changeTotal(totalQuestions - 1)} disabled={totalQuestions <= 8}>−</button>
-                  <input type="number" min={8} max={20} value={totalQuestions} onChange={(event) => changeTotal(Number(event.target.value))} />
-                  <button type="button" onClick={() => changeTotal(totalQuestions + 1)} disabled={totalQuestions >= 20}>+</button>
+                  <input type="number" min={8} max={12} value={totalQuestions} onChange={(event) => changeTotal(Number(event.target.value))} />
+                  <button type="button" onClick={() => changeTotal(totalQuestions + 1)} disabled={totalQuestions >= 12}>+</button>
                 </div>
-                <small>8–20 questions; six choices and 12 questions are recommended.</small>
+                <small>Choose 8–12 questions. Twelve is recommended for a broad weekly review.</small>
               </label>
             </div>
 
