@@ -15,13 +15,13 @@
     "print:dev": "next dev -p 3000"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^131.0.1",
+    "@sparticuz/chromium": "^143.0.4",
     "dotenv": "^16.5.0",
     "jszip": "^3.10.1",
     "katex": "^0.16.25",
     "next": "15.5.22",
     "next-auth": "5.0.0-beta.32",
-    "playwright-core": "^1.49.1",
+    "playwright-core": "^1.57.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "seedrandom": "^3.0.5",

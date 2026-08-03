@@ -1,9 +1,10 @@
 import { existsSync } from 'fs';
-import { mkdtemp, rm } from 'fs/promises';
-import { tmpdir } from 'os';
-import path from 'path';
 import chromium from '@sparticuz/chromium';
-import { chromium as playwrightChromium, type BrowserContext } from 'playwright-core';
+import {
+  chromium as playwrightChromium,
+  type Browser,
+  type BrowserContext,
+} from 'playwright-core';
 
 export interface PdfDocument {
   name: string;
@@ -24,6 +25,7 @@ async function resolveBrowser(): Promise<{ executablePath: string; args: string[
   }
   const localPath = LOCAL_CHROME_PATHS.find((candidate) => existsSync(candidate));
   if (localPath) return { executablePath: localPath, args: [] };
+  chromium.setGraphicsMode = false;
   return {
     executablePath: await chromium.executablePath(),
     args: chromium.args,
@@ -32,16 +34,17 @@ async function resolveBrowser(): Promise<{ executablePath: string; args: string[
 
 export async function renderPdfDocuments(documents: PdfDocument[]): Promise<Map<string, Buffer>> {
   const browserConfig = await resolveBrowser();
-  const profileDirectory = await mkdtemp(path.join(tmpdir(), 'pep-worksheet-chrome-'));
+  let browser: Browser | null = null;
   let context: BrowserContext | null = null;
 
   try {
-    context = await playwrightChromium.launchPersistentContext(profileDirectory, {
+    browser = await playwrightChromium.launch({
       executablePath: browserConfig.executablePath,
       args: browserConfig.args,
       headless: true,
     });
-    const page = context.pages()[0] ?? await context.newPage();
+    context = await browser.newContext();
+    const page = await context.newPage();
     const results = new Map<string, Buffer>();
 
     for (const pdfDocument of documents) {
@@ -60,6 +63,6 @@ export async function renderPdfDocuments(documents: PdfDocument[]): Promise<Map<
     return results;
   } finally {
     if (context) await context.close().catch(() => undefined);
-    await rm(profileDirectory, { recursive: true, force: true }).catch(() => undefined);
+    if (browser) await browser.close().catch(() => undefined);
   }
 }
