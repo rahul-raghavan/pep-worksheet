@@ -217,7 +217,7 @@ export function renderAnswerKeyHtml(manifest: WeeklyWorksheetManifest): string {
           <div class="answer-number">${displayNumber}</div>
           <div>
             <div class="answer-value">${renderSegments(question.answer)}</div>
-            <div class="answer-meta">${escapeHtml(question.skillName)} · ${titleCase(question.band)}</div>
+            <div class="answer-meta">${escapeHtml(question.familyName ? `${question.familyName} · ${question.skillName}` : question.skillName)} · ${titleCase(question.band)}</div>
           </div>
         </div>
       `;

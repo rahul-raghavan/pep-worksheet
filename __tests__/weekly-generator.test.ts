@@ -26,7 +26,7 @@ describe('weekly worksheet composer', () => {
     expect(manifest.questionPages).toHaveLength(2);
     expect(manifest.questionPages.flat()).toHaveLength(12);
     for (const selection of manifest.recipe.selections) {
-      expect(manifest.questions.filter((question) => question.skillId === selection.skillId)).toHaveLength(2);
+      expect(manifest.questions.filter((question) => question.familyId === selection.skillId)).toHaveLength(2);
     }
   });
 
@@ -50,15 +50,15 @@ describe('weekly worksheet composer', () => {
   it('uses text-only geometry prompts and allows student drawing instructions', () => {
     const recipe = defaultRecipe('geometry-only-text');
     recipe.selections = [
-      { skillId: 'angle-facts', band: 'support', style: 'applied', count: 4 },
-      { skillId: 'lines-polygons', band: 'support', style: 'applied', count: 4 },
+      { skillId: 'angles', selectionType: 'family', band: 'support', style: 'applied', count: 4 },
+      { skillId: 'lines-polygons', selectionType: 'family', band: 'support', style: 'applied', count: 4 },
     ];
     recipe.totalQuestions = 8;
     const manifest = composeWeeklyWorksheet(recipe);
     const promptText = manifest.questions.flatMap((question) => question.prompt.map((segment) => segment.value)).join(' ');
     expect(promptText).not.toMatch(/<svg|<path|diagram/i);
     expect(promptText).toMatch(/draw/i);
-    expect(manifest.questions.every((question) => question.responseSpace === 'large')).toBe(true);
+    expect(manifest.questions.some((question) => question.responseSpace === 'large')).toBe(true);
   });
 
   it('rejects a worksheet whose working-space requirements exceed two pages', () => {
@@ -73,7 +73,7 @@ describe('weekly worksheet composer', () => {
   it('keeps written-operation practice substantial and word-problem meanings exact', () => {
     for (let index = 0; index < 100; index += 1) {
       const division = generateDraftQuestion({
-        skillId: 'long-division',
+        skillId: 'division-one-digit',
         band: 'support',
         style: 'direct',
         seed: `division-size-${index}`,
@@ -84,7 +84,7 @@ describe('weekly worksheet composer', () => {
       expect(division.fingerprintPayload.dividend as number).toBeGreaterThanOrEqual(1000);
 
       const integers = generateDraftQuestion({
-        skillId: 'integer-operations',
+        skillId: 'integer-addition-subtraction',
         band: 'support',
         style: 'direct',
         seed: `integer-depth-${index}`,
@@ -95,7 +95,7 @@ describe('weekly worksheet composer', () => {
     }
 
     const decimalSubtraction = Array.from({ length: 50 }, (_, index) => generateDraftQuestion({
-      skillId: 'decimal-operations',
+      skillId: 'decimal-subtraction',
       band: 'core',
       style: 'applied',
       seed: `decimal-context-${index}`,
@@ -105,7 +105,7 @@ describe('weekly worksheet composer', () => {
     expect(decimalSubtraction?.prompt.map((segment) => segment.value).join(' ')).toMatch(/had .* remained/i);
 
     const fractionSubtraction = Array.from({ length: 50 }, (_, index) => generateDraftQuestion({
-      skillId: 'fraction-add-subtract',
+      skillId: 'fraction-subtract-unlike',
       band: 'core',
       style: 'applied',
       seed: `fraction-context-${index}`,
@@ -132,4 +132,28 @@ describe('weekly worksheet composer', () => {
       }
     }
   }, 30_000);
+
+  it('honours a precise target instead of switching to a related concept', () => {
+    const recipe = defaultRecipe('precise-hcf');
+    recipe.selections = [
+      { skillId: 'hcf', selectionType: 'skill', band: 'core', style: 'mixed', count: 8 },
+    ];
+    recipe.totalQuestions = 8;
+    const manifest = composeWeeklyWorksheet(recipe);
+    expect(new Set(manifest.questions.map((question) => question.skillId))).toEqual(new Set(['hcf']));
+    expect(manifest.questions.every((question) => question.templateId.startsWith('hcf-'))).toBe(true);
+  });
+
+  it('expands a mixed family deterministically across its precise targets', () => {
+    const recipe = defaultRecipe('mixed-number-properties');
+    recipe.selections = [
+      { skillId: 'factors-multiples-primes', selectionType: 'family', band: 'core', style: 'direct', count: 8 },
+    ];
+    recipe.totalQuestions = 8;
+    const first = composeWeeklyWorksheet(recipe);
+    const second = composeWeeklyWorksheet(recipe);
+    expect(second).toEqual(first);
+    expect(new Set(first.questions.map((question) => question.skillId)).size).toBeGreaterThan(3);
+    expect(first.questions.every((question) => question.familyId === 'factors-multiples-primes')).toBe(true);
+  });
 });

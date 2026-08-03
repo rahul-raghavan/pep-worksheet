@@ -8,6 +8,8 @@ export type UsageTrackingStatus = 'recorded' | 'not_configured' | 'failed';
 export interface SkillUsageSummary {
   skillId: string;
   skillName: string;
+  familyName?: string;
+  domainName?: string;
   questionCount: number;
 }
 
@@ -66,6 +68,8 @@ export interface UsageReport {
 const SkillUsageSummarySchema = z.object({
   skillId: z.string(),
   skillName: z.string(),
+  familyName: z.string().optional(),
+  domainName: z.string().optional(),
   questionCount: z.number().int().nonnegative(),
 });
 
@@ -114,12 +118,14 @@ export function describeProblemSet(manifest: WeeklyWorksheetManifest) {
     skills.set(question.skillId, {
       skillId: question.skillId,
       skillName: question.skillName,
+      familyName: question.familyName,
+      domainName: question.domain,
       questionCount: (existing?.questionCount ?? 0) + 1,
     });
   });
 
   return {
-    startingPointId: manifest.recipe.startingPointId || 'custom',
+    startingPointId: 'manual-selection',
     totalQuestions: manifest.questions.length,
     skillCount: skills.size,
     skillSummary: [...skills.values()].sort((a, b) => a.skillId.localeCompare(b.skillId)),

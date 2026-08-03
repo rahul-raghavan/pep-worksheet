@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MarkingGuideSchema } from '../content-engine/schema';
 
 export const BandSchema = z.enum(['support', 'core', 'stretch']);
 export const QuestionStyleSchema = z.enum(['direct', 'applied', 'mixed']);
@@ -12,6 +13,7 @@ export const PromptSegmentSchema = z.object({
 
 export const SkillSelectionSchema = z.object({
   skillId: z.string().min(1),
+  selectionType: z.enum(['family', 'skill']).default('skill'),
   band: BandSchema,
   style: QuestionStyleSchema,
   count: z.number().int().min(1).max(20),
@@ -20,6 +22,7 @@ export const SkillSelectionSchema = z.object({
 export const WeeklyWorksheetRecipeSchema = z
   .object({
     schemaVersion: z.literal('weekly-worksheet-recipe-v1'),
+    subjectPackId: z.string().min(1).default('pep-elementary-mathematics'),
     title: z.string().trim().min(1).max(80),
     groupLabel: z.string().trim().max(60).optional(),
     startingPointId: z.string().trim().min(1).max(60).optional(),
@@ -53,12 +56,17 @@ export const GeneratedQuestionSchema = z.object({
   skillId: z.string().min(1),
   skillName: z.string().min(1),
   domain: z.string().min(1),
+  subjectId: z.string().min(1).optional(),
+  domainId: z.string().min(1).optional(),
+  familyId: z.string().min(1).optional(),
+  familyName: z.string().min(1).optional(),
   band: BandSchema,
   style: z.enum(['direct', 'applied']),
   kind: QuestionKindSchema,
   prompt: z.array(PromptSegmentSchema).min(1),
   answer: z.array(PromptSegmentSchema).min(1),
   answerText: z.string().min(1),
+  markingGuide: MarkingGuideSchema.optional(),
   responseSpace: ResponseSpaceSchema,
   equipment: z.array(z.string()),
   fingerprint: z.string().min(1),
@@ -80,7 +88,7 @@ export type QuestionStyle = z.infer<typeof QuestionStyleSchema>;
 export type ResponseSpace = z.infer<typeof ResponseSpaceSchema>;
 export type QuestionKind = z.infer<typeof QuestionKindSchema>;
 export type PromptSegment = z.infer<typeof PromptSegmentSchema>;
-export type SkillSelection = z.infer<typeof SkillSelectionSchema>;
-export type WeeklyWorksheetRecipe = z.infer<typeof WeeklyWorksheetRecipeSchema>;
+export type SkillSelection = z.output<typeof SkillSelectionSchema>;
+export type WeeklyWorksheetRecipe = z.input<typeof WeeklyWorksheetRecipeSchema>;
 export type GeneratedQuestion = z.infer<typeof GeneratedQuestionSchema>;
 export type WeeklyWorksheetManifest = z.infer<typeof WeeklyWorksheetManifestSchema>;

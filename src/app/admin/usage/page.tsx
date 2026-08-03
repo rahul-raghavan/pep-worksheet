@@ -109,11 +109,6 @@ export default async function UsagePage() {
 
             <section className="usage-breakdown-grid">
               <article className="usage-panel">
-                <h2>Starting points used</h2>
-                <p>Shows whether teachers begin from a preset or make a custom setup.</p>
-                <ol>{report.startingPoints.map((item) => <li key={item.id}><span>{item.name}</span><strong>{item.downloads}</strong></li>)}</ol>
-              </article>
-              <article className="usage-panel">
                 <h2>Practice bands generated</h2>
                 <p>Counts questions at Support, Core and Stretch rather than whole downloads.</p>
                 <ol>{report.bands.map((item) => <li key={item.id}><span>{item.name}</span><strong>{item.downloads}</strong></li>)}</ol>
@@ -147,13 +142,12 @@ export default async function UsagePage() {
               </div>
               <div className="usage-table-wrap">
                 <table className="usage-table usage-recent-table">
-                  <thead><tr><th>When</th><th>Teacher</th><th>Setup</th><th>Problem set</th><th>Band and style</th></tr></thead>
+                  <thead><tr><th>When</th><th>Teacher</th><th>Problem set</th><th>Band and style</th></tr></thead>
                   <tbody>
                     {report.recent.map((event) => (
                       <tr key={event.id}>
                         <td>{formatDate(event.created_at)}</td>
                         <td>{event.teacher_email}</td>
-                        <td>{event.starting_point_id === 'custom' ? 'Custom setup' : event.starting_point_id.replace(/-/g, ' ')}</td>
                         <td><strong>{event.total_questions} questions</strong><small>{problemSetDescription(event)}</small></td>
                         <td>
                           <span>{summaryText(event.band_summary)}</span>

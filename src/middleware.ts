@@ -22,4 +22,4 @@ export default auth((req) => {
 // Optionally configure middleware matcher
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-}; 
+};

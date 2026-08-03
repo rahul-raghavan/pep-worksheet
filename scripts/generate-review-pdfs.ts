@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
-import { WORKSHEET_PRESETS } from '../src/lib/worksheet/catalog';
 import { composeWeeklyWorksheet } from '../src/lib/worksheet/compose';
 import { renderPdfDocuments } from '../src/lib/worksheet/pdf';
 import { renderAnswerKeyHtml, renderStudentHtml } from '../src/lib/worksheet/render';
@@ -10,9 +9,6 @@ interface ReviewPaper {
   slug: string;
   recipe: WeeklyWorksheetRecipe;
 }
-
-const fractionsPreset = WORKSHEET_PRESETS.find((preset) => preset.id === 'fractions-decimals');
-if (!fractionsPreset) throw new Error('The fractions and decimals preset is missing.');
 
 const papers: ReviewPaper[] = [
   {
@@ -37,9 +33,16 @@ const papers: ReviewPaper[] = [
       schemaVersion: 'weekly-worksheet-recipe-v1',
       title: 'Weekly Mathematics Practice',
       groupLabel: 'Fractions Group',
-      totalQuestions: fractionsPreset.totalQuestions,
+      totalQuestions: 12,
       seed: 'review-fractions-decimals-2026-08',
-      selections: fractionsPreset.selections.map((selection) => ({ ...selection })),
+      selections: [
+        { skillId: 'fraction-foundations', selectionType: 'family', band: 'core', style: 'mixed', count: 2 },
+        { skillId: 'fraction-add-subtract', selectionType: 'family', band: 'core', style: 'mixed', count: 2 },
+        { skillId: 'fraction-multiply-divide', selectionType: 'family', band: 'core', style: 'mixed', count: 2 },
+        { skillId: 'decimal-understanding', selectionType: 'family', band: 'core', style: 'mixed', count: 2 },
+        { skillId: 'decimal-operations', selectionType: 'family', band: 'core', style: 'mixed', count: 2 },
+        { skillId: 'percentages-proportion', selectionType: 'family', band: 'core', style: 'applied', count: 2 },
+      ],
     },
   },
   {

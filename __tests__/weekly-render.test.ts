@@ -3,7 +3,7 @@ import { composeWeeklyWorksheet } from '@/lib/worksheet/compose';
 import { renderAnswerKeyHtml, renderStudentHtml } from '@/lib/worksheet/render';
 
 function manifest() {
-  const preset = WORKSHEET_PRESETS[2];
+  const preset = WORKSHEET_PRESETS[0];
   return composeWeeklyWorksheet({
     schemaVersion: 'weekly-worksheet-recipe-v1',
     title: 'Weekly Mathematics Practice',

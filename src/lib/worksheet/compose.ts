@@ -1,5 +1,11 @@
 import { createHash } from 'crypto';
-import { getSkill } from './catalog';
+import {
+  MATHEMATICS_PACK,
+  MATH_PACK_INDEX,
+  getFamily,
+  getSkill,
+  normalizeSelectionReference,
+} from './catalog';
 import { generateDraftQuestion } from './generators';
 import { createSeededRandom } from './random';
 import {
@@ -13,8 +19,8 @@ import {
   type WeeklyWorksheetRecipe,
 } from './schema';
 
-export const GENERATOR_VERSION = '2026.08.1';
-export const LIBRARY_VERSION = 'pep-elementary-2026.08.1';
+export const GENERATOR_VERSION = '2026.08.2';
+export const LIBRARY_VERSION = MATHEMATICS_PACK.version;
 
 const FIRST_PAGE_CAPACITY = 208;
 const SECOND_PAGE_CAPACITY = 224;
@@ -61,20 +67,52 @@ function hash(value: unknown): string {
 
 function buildPositionPlan(selections: SkillSelection[], seed: string): SkillSelection[] {
   const rng = createSeededRandom(`${seed}/position-plan`);
-  const order = rng.shuffle([...selections].sort((left, right) => left.skillId.localeCompare(right.skillId)));
-  const remaining = new Map(order.map((selection) => [selection.skillId, selection.count]));
+  const key = (selection: SkillSelection) => `${selection.selectionType}:${selection.skillId}`;
+  const order = rng.shuffle([...selections].sort((left, right) => key(left).localeCompare(key(right))));
+  const remaining = new Map(order.map((selection) => [key(selection), selection.count]));
   const plan: SkillSelection[] = [];
 
   while ([...remaining.values()].some((count) => count > 0)) {
     for (const selection of order) {
-      const count = remaining.get(selection.skillId) ?? 0;
+      const selectionKey = key(selection);
+      const count = remaining.get(selectionKey) ?? 0;
       if (count > 0) {
         plan.push(selection);
-        remaining.set(selection.skillId, count - 1);
+        remaining.set(selectionKey, count - 1);
       }
     }
   }
   return plan;
+}
+
+function normalizeSelections(selections: SkillSelection[]): SkillSelection[] {
+  const normalized = selections.map((selection) => {
+    const reference = normalizeSelectionReference(selection.skillId, selection.selectionType);
+    return { ...selection, skillId: reference.id, selectionType: reference.selectionType };
+  });
+  const keys = normalized.map((selection) => `${selection.selectionType}:${selection.skillId}`);
+  if (new Set(keys).size !== keys.length) {
+    throw new Error('Choose each skill or skill family only once.');
+  }
+  const selectedFamilies = new Set(
+    normalized.filter((selection) => selection.selectionType === 'family').map((selection) => selection.skillId),
+  );
+  const overlap = normalized.find((selection) => (
+    selection.selectionType === 'skill'
+    && selectedFamilies.has(getSkill(selection.skillId).familyId)
+  ));
+  if (overlap) {
+    throw new Error(`Choose either ${getFamily(getSkill(overlap.skillId).familyId).name} as a mix or its specific skills, not both.`);
+  }
+  return normalized;
+}
+
+function resolveTargetId(selection: SkillSelection, occurrence: number, seed: string): string {
+  if (selection.selectionType === 'skill') return getSkill(selection.skillId).id;
+  const family = getFamily(selection.skillId);
+  const targets = createSeededRandom(`${seed}/family/${family.id}`)
+    .shuffle([...family.targetIds].sort((left, right) => left.localeCompare(right)));
+  return targets[occurrence % targets.length];
 }
 
 function effectiveStyle(style: QuestionStyle, occurrence: number, seed: string): 'direct' | 'applied' {
@@ -106,8 +144,16 @@ function assignPages(questions: GeneratedQuestion[]): [string[], string[]] {
 }
 
 export function composeWeeklyWorksheet(input: WeeklyWorksheetRecipe): WeeklyWorksheetManifest {
-  const recipe = WeeklyWorksheetRecipeSchema.parse(input);
-  recipe.selections.forEach((selection) => getSkill(selection.skillId));
+  const parsedRecipe = WeeklyWorksheetRecipeSchema.parse(input);
+  const recipe = {
+    ...parsedRecipe,
+    subjectPackId: MATHEMATICS_PACK.id,
+    selections: normalizeSelections(parsedRecipe.selections),
+  };
+  recipe.selections.forEach((selection) => {
+    if (selection.selectionType === 'family') getFamily(selection.skillId);
+    else getSkill(selection.skillId);
+  });
 
   const positionPlan = buildPositionPlan(recipe.selections, recipe.seed);
   const occurrences = new Map<string, number>();
@@ -115,15 +161,20 @@ export function composeWeeklyWorksheet(input: WeeklyWorksheetRecipe): WeeklyWork
   const questions: GeneratedQuestion[] = [];
 
   positionPlan.forEach((selection, position) => {
-    const occurrence = occurrences.get(selection.skillId) ?? 0;
-    occurrences.set(selection.skillId, occurrence + 1);
-    const style = effectiveStyle(selection.style, occurrence, `${recipe.seed}/${selection.skillId}`);
-    const skill = getSkill(selection.skillId);
+    const selectionKey = `${selection.selectionType}:${selection.skillId}`;
+    const occurrence = occurrences.get(selectionKey) ?? 0;
+    occurrences.set(selectionKey, occurrence + 1);
+    const style = effectiveStyle(selection.style, occurrence, `${recipe.seed}/${selectionKey}`);
+    const targetId = resolveTargetId(selection, occurrence, recipe.seed);
+    const skill = getSkill(targetId);
+    const family = getFamily(skill.familyId);
+    const domain = MATH_PACK_INDEX.domainsById.get(family.domainId);
+    if (!domain) throw new Error(`Unknown mathematics area: ${family.domainId}`);
     let generated: GeneratedQuestion | null = null;
 
     for (let attempt = 0; attempt < 100 && !generated; attempt += 1) {
       const draft = generateDraftQuestion({
-        skillId: selection.skillId,
+        skillId: targetId,
         band: selection.band,
         style,
         seed: recipe.seed,
@@ -131,7 +182,7 @@ export function composeWeeklyWorksheet(input: WeeklyWorksheetRecipe): WeeklyWork
         attempt,
       });
       const fingerprint = hash({
-        skillId: selection.skillId,
+        skillId: targetId,
         templateId: draft.templateId,
         payload: draft.fingerprintPayload,
       });
@@ -141,22 +192,31 @@ export function composeWeeklyWorksheet(input: WeeklyWorksheetRecipe): WeeklyWork
         id: `q-${hash({ seed: recipe.seed, position, fingerprint }).slice(0, 16)}`,
         templateId: draft.templateId,
         templateVersion: '1',
-        skillId: selection.skillId,
+        skillId: targetId,
         skillName: skill.name,
-        domain: skill.domain,
+        domain: domain.name,
+        subjectId: MATHEMATICS_PACK.id,
+        domainId: domain.id,
+        familyId: family.id,
+        familyName: family.name,
         band: selection.band,
         style,
         kind: draft.kind,
         prompt: draft.prompt,
         answer: draft.answer,
         answerText: draft.answerText,
+        markingGuide: {
+          type: 'exact',
+          answer: draft.answer,
+          answerText: draft.answerText,
+        },
         responseSpace: draft.responseSpace,
         equipment: draft.equipment,
         fingerprint,
       };
     }
 
-    if (!generated) throw new VariantShortageError(selection.skillId, selection.count);
+    if (!generated) throw new VariantShortageError(targetId, selection.count);
     questions.push(generated);
   });
 

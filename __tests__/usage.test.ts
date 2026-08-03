@@ -51,9 +51,10 @@ describe('privacy-minimal worksheet usage reporting', () => {
     const description = describeProblemSet(generated);
     const serialized = JSON.stringify(description);
 
-    expect(description.startingPointId).toBe('weekly-cumulative');
+    expect(description.startingPointId).toBe('manual-selection');
     expect(description.totalQuestions).toBe(12);
-    expect(description.skillSummary).toHaveLength(6);
+    expect(description.skillSummary).toHaveLength(12);
+    expect(new Set(description.skillSummary.map((skill) => skill.familyName)).size).toBe(6);
     expect(Object.values(description.styleSummary).reduce((sum, count) => sum + count, 0)).toBe(12);
     expect(serialized).not.toContain(generated.recipe.title);
     expect(serialized).not.toContain(generated.recipe.groupLabel);
