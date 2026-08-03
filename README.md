@@ -1,186 +1,115 @@
-# PEP Worksheet Generator
+# PEP Weekly Math Practice
 
-A web application for PEP Schoolv2 staff to generate printable math problem sets and answer keys.
+A teacher-facing tool for creating one mixed, cumulative mathematics worksheet for a small group of elementary students. A worksheet is normally issued on Monday, worked on during the week, and submitted on Friday.
 
-## Requirements
+The generator is designed for written practice of previously taught material—not timed automaticity and not first teaching. It creates new, reproducible question variants instead of repeatedly sampling a small fixed bank.
 
-- Node.js >= 18.18
-- npm
+## What teachers can do
 
-## Setup
+- Start from one of four simple presets or a balanced default.
+- Choose up to eight previously taught sub-skills; six are selected by default.
+- Set each skill to **Support**, **Core**, or **Stretch**.
+- Choose **Direct**, **Applied**, or **Mixed** questions for each skill.
+- Generate 8–20 questions; the default is 12.
+- Preview the exact two-page, A4 student worksheet before downloading.
+- Print in true black and white, with unruled blank working space.
+- Download a ZIP containing the student PDF, teacher answer key, reusable recipe, and immutable manifest.
+- Reprint an exact previous worksheet or reuse its setup to create fresh questions.
+- Privately track successful downloads by teacher, selected skills, practice bands, and question styles.
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Copy `.env.example` to `.env.local` and fill in the required values
-4. Run the development server:
-   ```bash
-   npm run dev
-   ```
+Geometry questions are text-based and may ask students to draw. The PDF never depends on generated diagrams. Written-operation generators use suitably substantial numbers, with enough working space for students to show their method.
 
-## Development
+## Local setup
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run test` - Run tests
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
-
-## Testing
-
-Tests are written using Jest and React Testing Library. Run tests with:
-```bash
-npm run test
-```
-
-Coverage threshold is set to 85% as per project requirements.
-
-## Contributing
-
-Follow the conventional commits specification for all commit messages:
-- feat: A new feature
-- fix: A bug fix
-- docs: Documentation only changes
-- style: Changes that do not affect the meaning of the code
-- refactor: A code change that neither fixes a bug nor adds a feature
-- perf: A code change that improves performance
-- test: Adding missing tests or correcting existing tests
-- build: Changes that affect the build system or external dependencies
-- ci: Changes to our CI configuration files and scripts
-
-## Getting Started
-
-First, run the development server:
+Requirements: Node.js 18.18 or later, npm, and Google OAuth credentials.
 
 ```bash
+npm install
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). The root URL redirects to `/builder`; unauthenticated users are sent to `/sign-in`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See `.env.example`. At minimum configure:
 
-## Learn More
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `AUTH_SECRET`
+- `NEXTAUTH_URL`
 
-To learn more about Next.js, take a look at the following resources:
+Teacher access defaults to verified Google accounts at `@pepschoolv2.com` and `@accelschool.in`. Override the defaults with `ALLOWED_EMAIL_DOMAINS` and add exceptional individual accounts with `ALLOWED_EMAILS` only when required.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+For Google OAuth, add both the local and production callback URLs as authorized redirect URIs:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Manual Sync
-
-To manually update the local question bank from Google Sheets:
-
-1. Ensure your `.env.local` contains:
-   - `GOOGLE_SHEETS_ID`
-   - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
-   - `GOOGLE_PRIVATE_KEY`
-2. Run:
-   ```bash
-   npm run sync
-   ```
-3. This will fetch, validate, and write the latest questions to `data/questions.json`.
-
-For automated weekly sync, see `.github/workflows/weekly-sync.yml`.
-
-## Programmatic usage
-
-You can use the core generator utility in your own scripts:
-
-```ts
-import { generate } from './lib/generate';
-
-const { problems, answers } = generate({
-  topics: ['Fractions', 'Decimals'],
-  minLevel: 2,
-  maxLevel: 4,
-  count: 10,
-  seed: 'optional-seed', // for deterministic output
-});
-
-console.log(problems);
-console.log(answers);
+```text
+http://localhost:3000/api/auth/callback/google
+https://YOUR-DOMAIN/api/auth/callback/google
 ```
 
-- The generator will sample unique questions matching your filters.
-- If the pool is too small, it will throw a `TooSmallPoolError` with details.
+Set `NEXTAUTH_URL` to the matching site origin in each environment. Vercel production and preview environments should have their own correct values.
 
-## API Reference
+## Download tracking
 
-### POST /api/worksheet
+Successful worksheet-pack generations can be recorded in Supabase. Previews and failed generations are deliberately not counted. The event contains the signed-in teacher email, timestamp, starting point, question count, and aggregate skill, band, and style counts. It never stores group labels, worksheet titles, seeds, generated questions, answers, or student information.
 
-Generate a worksheet with filtered, unique, and optionally seeded questions.
+1. Create or choose a Supabase project.
+2. Run [`supabase/migrations/202608020001_create_worksheet_download_events.sql`](supabase/migrations/202608020001_create_worksheet_download_events.sql) in the Supabase SQL editor.
+3. Add these server-side environment variables locally and in Vercel:
 
-**Request Body:**
-```json
-{
-  "topics": ["Fractions", "Decimals"],
-  "minLevel": 2,
-  "maxLevel": 4,
-  "count": 10,
-  "seed": "optional-seed"
-}
+```text
+SUPABASE_URL=https://YOUR-PROJECT.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=YOUR-SERVICE-ROLE-KEY
+PRIVATE_ADMIN_EMAILS=rahul@pepschoolv2.com
 ```
 
-**Response:**
-```json
-{
-  "problems": [
-    { "id": "...", "Topic": "Fractions", "Difficulty": 2, "Front": "...", "Back": "..." },
-    // ...
-  ],
-  "answers": [
-    { "id": "...", "Topic": "Fractions", "Difficulty": 2, "Front": "...", "Back": "..." },
-    // ...
-  ]
-}
-```
+The service-role key must never use a `NEXT_PUBLIC_` prefix. The event table has RLS enabled and grants no browser access to ordinary authenticated or anonymous clients. Only the server writes events and reads the private report.
 
-- Returns 400 for invalid input (e.g. empty topics).
-- Returns 401 if not authenticated as a PEP teacher or Rahul.
-- Returns 422 if not enough questions match the filter.
-- Rate-limited to 5 requests/minute/user.
-- Only POST is allowed; other methods return 405.
+The private tracker is available at `/admin/usage` to the configured administrator emails. A visible status distinguishes a working connection with zero downloads from missing configuration or a failed Supabase query. Tracking failures do not block a teacher from receiving a completed worksheet pack.
 
-## Print / Save as PDF Workflow
+After deployment, sign in as a teacher, preview once, and download once. Then sign in as the private administrator and confirm the tracker shows exactly one event; the preview should not appear.
 
-You can print or save worksheets as PDF directly from your browser:
-
-1. Go to the Worksheet Builder and select your topics, counts, and levels.
-2. Click Preview to see the worksheet.
-3. In the preview modal, click **Print / Save as PDF** (for problems) or **Print Answers** (for answers).
-4. This opens a new tab with a print-optimized A4 page. Use your browser's Print dialog (Cmd+P or Ctrl+P) to print or save as PDF.
-
-![Print Preview Screenshot](docs/print-preview.png)
-
-- The print page is always single-page A4 portrait, with adaptive spacing.
-- No special PDF engine or downloads required—just use your browser's built-in print/save.
-
-### Local Development
-
-To run the print workflow locally:
+## Commands
 
 ```bash
-npm run print:dev
+npm run dev                 # Local server on port 3000
+npm run build               # Production build
+npm run start               # Run the production build
+npm run lint                # ESLint
+npm test -- --runInBand     # Deterministic generator, API, renderer and UI tests
+npx ts-node scripts/smoke-weekly-pdf.ts  # Local PDF/ZIP smoke pack
 ```
 
-This starts the dev server on port 3000 for easy access to the print preview.
+The smoke script writes disposable files under `output/pdf/`; that folder is ignored by Git.
+
+## Architecture
+
+- `src/lib/worksheet/catalog.ts` — curriculum-backed sub-skills and teacher presets
+- `src/lib/worksheet/generators.ts` — typed, parameterized question generators
+- `src/lib/worksheet/compose.ts` — seeded composition, interleaving, uniqueness and page-budget checks
+- `src/lib/worksheet/render.ts` — student and answer-key HTML with KaTeX MathML
+- `src/lib/worksheet/pdf.ts` — local Chrome or serverless Chromium rendering
+- `src/lib/worksheet/pack.ts` — complete ZIP packaging
+- `src/lib/worksheet/history.ts` — browser-local exact worksheet history
+- `src/app/api/worksheet/*` — authenticated compose, preview and download routes
+- `src/lib/usage.ts` — privacy-minimal Supabase event recording and reporting
+- `src/app/admin/usage` — private download tracker
+
+One immutable manifest drives the student paper, answer key, exact reprint, and audit trail. The same recipe and seed reproduce the same questions.
+
+## History and student data
+
+The reusable worksheet history remains only in that teacher's browser using `localStorage`. The server stores only the privacy-minimal successful-download event described above; it does not store the worksheet manifest or any student information. A browser history entry can be:
+
+- **Reprinted exactly**, using its stored manifest; or
+- **Used as a setup**, producing fresh variants from its stored recipe.
+
+Clearing browser storage clears this history, so the downloaded ZIP is the durable record.
+
+## Production notes
+
+PDF generation uses Playwright. Locally it discovers an installed Chrome/Chromium browser; on Vercel it uses `@sparticuz/chromium`. The Next.js output-tracing configuration includes the required serverless browser files.
+
+Keep `AUTH_SECRET`, the Google client secret, and `SUPABASE_SERVICE_ROLE_KEY` server-side. Never expose them through `NEXT_PUBLIC_*` variables.

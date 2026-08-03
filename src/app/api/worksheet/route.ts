@@ -1,77 +1,53 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { generate, TooSmallPoolError } from '../../../../lib/generate';
+import { ZodError } from 'zod';
 import { auth } from '@/auth';
+import { isAllowedEmail } from '@/lib/access';
+import { checkRateLimit } from '@/lib/rate-limit';
+import {
+  composeWeeklyWorksheet,
+  LayoutCapacityError,
+  VariantShortageError,
+} from '@/lib/worksheet/compose';
+import { WeeklyWorksheetRecipeSchema } from '@/lib/worksheet/schema';
 
-// Simple in-memory rate limiter (per user, per minute)
-const rateLimitMap = new Map<string, { count: number; reset: number }>();
-const RATE_LIMIT = 5;
-const WINDOW_MS = 60 * 1000;
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-const WorksheetSchema = z.object({
-  rows: z.array(z.object({
-    topic: z.string().min(1),
-    count: z.number().int().min(1),
-    level: z.number().int().min(1).max(5),
-  })).min(1),
-  seed: z.string().optional(),
-});
-
-function isAllowedUser(email: string | undefined | null) {
-  return !!email && (email.endsWith('@pepschoolv2.com') || email.endsWith('@accelschool.in') || email === 'rahul.glass@gmail.com');
-}
-
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   const session = await auth();
   const email = session?.user?.email;
-  if (typeof email !== 'string' || !isAllowedUser(email)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isAllowedEmail(email)) {
+    return NextResponse.json({ error: 'Sign in with an approved school account.' }, { status: 401 });
   }
-  // Rate limit
-  const key = email;
-  const now = Date.now();
-  const entry = rateLimitMap.get(key);
-  if (!entry || now > entry.reset) {
-    rateLimitMap.set(key, { count: 1, reset: now + WINDOW_MS });
-  } else if (entry.count >= RATE_LIMIT) {
-    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
-  } else {
-    entry.count++;
-    rateLimitMap.set(key, entry);
+  if (!checkRateLimit(`compose:${email}`, 30)) {
+    return NextResponse.json({ error: 'Please wait a moment before creating another preview.' }, { status: 429 });
   }
-  // Validate body
-  let body;
+
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-  const parse = WorksheetSchema.safeParse(body);
-  if (!parse.success) {
-    return NextResponse.json({ error: 'Invalid request', details: parse.error.errors }, { status: 400 });
-  }
-  try {
-    const { problems, answers } = generate(
-      parse.data.rows,
-      {
-        seed: parse.data.seed,
-      }
-    );
-    return NextResponse.json({ problems, answers });
-  } catch (e) {
-    if (e instanceof TooSmallPoolError) {
-      return NextResponse.json({ error: 'Too small pool', available: e.available, requested: e.requested }, { status: 422 });
+    const recipe = WeeklyWorksheetRecipeSchema.parse(await request.json());
+    const manifest = composeWeeklyWorksheet(recipe);
+    return NextResponse.json({ manifest });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return NextResponse.json(
+        { error: 'Check the worksheet settings and try again.', details: error.issues },
+        { status: 400 },
+      );
     }
-    return NextResponse.json({ error: 'Internal error', details: (e as Error).message }, { status: 500 });
+    if (error instanceof LayoutCapacityError) {
+      return NextResponse.json({ error: error.message }, { status: 422 });
+    }
+    if (error instanceof VariantShortageError) {
+      return NextResponse.json(
+        { error: error.message, skillId: error.skillId, requested: error.requested },
+        { status: 422 },
+      );
+    }
+    console.error('weekly_worksheet_compose_failed', error);
+    return NextResponse.json({ error: 'The worksheet could not be created.' }, { status: 500 });
   }
 }
 
 export async function GET() {
   return new NextResponse('Method Not Allowed', { status: 405 });
 }
-
-export async function PUT() { return GET(); }
-export async function DELETE() { return GET(); }
-export async function PATCH() { return GET(); }
-
-export const dynamic = 'force-dynamic'; 

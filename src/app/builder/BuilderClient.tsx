@@ -1,227 +1,500 @@
-"use client";
-import React, { useState } from 'react';
-import questions from '../../../data/questions.json';
-import { routeToPrint } from '../../utils/routeToPrint';
+'use client';
 
-interface Question {
-  Topic: string;
-  // Add other fields if needed
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { allocateQuestionCounts } from '@/lib/worksheet/allocation';
+import {
+  SKILL_CATALOG,
+  WORKSHEET_PRESETS,
+  getSkill,
+} from '@/lib/worksheet/catalog';
+import {
+  loadWorksheetHistory,
+  saveWorksheetHistory,
+  type WorksheetHistoryEntry,
+} from '@/lib/worksheet/history';
+import type {
+  Band,
+  QuestionStyle,
+  SkillSelection,
+  WeeklyWorksheetManifest,
+  WeeklyWorksheetRecipe,
+} from '@/lib/worksheet/schema';
+
+const BAND_COPY: Record<Band, string> = {
+  support: 'Familiar version with cleaner values and fewer complications.',
+  core: 'Complete, expected version of a method students have already learned.',
+  stretch: 'Less direct values or an additional decision within the same taught skill.',
+};
+
+const STYLE_COPY: Record<QuestionStyle, string> = {
+  direct: 'The mathematics is stated directly.',
+  applied: 'Students use the skill in a familiar context.',
+  mixed: 'One direct and one applied question when the skill receives two questions.',
+};
+
+function cloneSelections(selections: readonly SkillSelection[]): SkillSelection[] {
+  return selections.map((selection) => ({ ...selection }));
 }
 
-const allTopics = Array.from(new Set((questions as Question[]).map(q => q.Topic))).sort();
-
-interface Row {
-  topic: string;
-  count: number;
-  level: number;
+function newSeed(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-interface PreviewQuestion {
-  id: string;
-  Topic: string;
-  Difficulty: number;
-  Front: string;
-  Back: string;
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function groupedSkills() {
+  const domains = new Map<string, typeof SKILL_CATALOG>();
+  SKILL_CATALOG.forEach((skill) => {
+    domains.set(skill.domain, [...(domains.get(skill.domain) ?? []), skill]);
+  });
+  return [...domains.entries()];
 }
 
 export default function BuilderClient({ email }: { email: string }) {
-  const [rows, setRows] = useState<Row[]>([
-    { topic: allTopics[0] || '', count: 1, level: 1 },
-  ]);
+  const recommended = WORKSHEET_PRESETS[0];
+  const [presetId, setPresetId] = useState<string>(recommended.id);
+  const [title, setTitle] = useState('Weekly Mathematics Practice');
+  const [groupLabel, setGroupLabel] = useState('');
+  const [totalQuestions, setTotalQuestions] = useState<number>(recommended.totalQuestions);
+  const [selections, setSelections] = useState<SkillSelection[]>(cloneSelections(recommended.selections));
+  const [manifest, setManifest] = useState<WeeklyWorksheetManifest | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewQuestions, setPreviewQuestions] = useState<PreviewQuestion[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<'compose' | 'preview' | 'download' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<WorksheetHistoryEntry[]>([]);
+  const plannerRef = useRef<HTMLDivElement>(null);
 
-  const total = rows.reduce((sum, r) => sum + r.count, 0);
-  const canAdd = rows.length < allTopics.length && total < 25;
-  const canPreview =
-    rows.length > 0 &&
-    rows.every(r => r.topic && r.count > 0 && r.level >= 1 && r.level <= 5) &&
-    new Set(rows.map(r => r.topic)).size === rows.length &&
-    total > 0 &&
-    total <= 25;
+  useEffect(() => setHistory(loadWorksheetHistory()), []);
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
-  function addRow() {
-    const used = new Set(rows.map(r => r.topic));
-    const next = allTopics.find(t => !used.has(t)) || '';
-    setRows([...rows, { topic: next, count: 1, level: 1 }]);
-  }
-  function updateRow(i: number, row: Row) {
-    setRows(rows.map((r, j) => (i === j ? row : r)));
-  }
-  function removeRow(i: number) {
-    setRows(rows.filter((_, j) => j !== i));
-  }
+  const domains = useMemo(groupedSkills, []);
+  const allocatedTotal = selections.reduce((sum, selection) => sum + selection.count, 0);
+  const shallowSkills = selections.filter((selection) => selection.count < 2).length;
+  const equipment = [...new Set(selections.flatMap((selection) => getSkill(selection.skillId).equipment ?? []))];
+  const isValid = selections.length > 0
+    && selections.length <= 8
+    && new Set(selections.map((selection) => selection.skillId)).size === selections.length
+    && totalQuestions >= 8
+    && totalQuestions <= 20
+    && allocatedTotal === totalQuestions;
 
-  async function handlePreview() {
-    setLoading(true);
+  function invalidate() {
+    setManifest(null);
     setError(null);
+  }
+
+  function rebalance(nextSelections: SkillSelection[], nextTotal = totalQuestions): SkillSelection[] {
+    const counts = allocateQuestionCounts(nextTotal, nextSelections.map((selection) => selection.skillId));
+    return nextSelections.map((selection) => ({ ...selection, count: counts[selection.skillId] }));
+  }
+
+  function applyPreset(nextPresetId: string) {
+    const preset = WORKSHEET_PRESETS.find((candidate) => candidate.id === nextPresetId);
+    if (!preset) return;
+    setPresetId(preset.id);
+    setTotalQuestions(preset.totalQuestions);
+    setSelections(cloneSelections(preset.selections));
+    invalidate();
+  }
+
+  function updateSelection(index: number, patch: Partial<SkillSelection>) {
+    setSelections((current) => current.map((selection, selectionIndex) => (
+      selectionIndex === index ? { ...selection, ...patch } : selection
+    )));
+    setPresetId('custom');
+    invalidate();
+  }
+
+  function changeTotal(nextTotal: number) {
+    const clamped = Math.max(8, Math.min(20, nextTotal));
+    setTotalQuestions(clamped);
+    setSelections((current) => rebalance(current, clamped));
+    setPresetId('custom');
+    invalidate();
+  }
+
+  function addSkill() {
+    const used = new Set(selections.map((selection) => selection.skillId));
+    const nextSkill = SKILL_CATALOG.find((skill) => !used.has(skill.id));
+    if (!nextSkill || selections.length >= 8) return;
+    const next = rebalance([
+      ...selections,
+      { skillId: nextSkill.id, band: 'core', style: 'mixed', count: 1 },
+    ]);
+    setSelections(next);
+    setPresetId('custom');
+    invalidate();
+  }
+
+  function removeSkill(index: number) {
+    if (selections.length === 1) return;
+    setSelections((current) => rebalance(current.filter((_, selectionIndex) => selectionIndex !== index)));
+    setPresetId('custom');
+    invalidate();
+  }
+
+  function applyAllBand(band: Band) {
+    setSelections((current) => current.map((selection) => ({ ...selection, band })));
+    setPresetId('custom');
+    invalidate();
+  }
+
+  function applyAllStyle(style: QuestionStyle) {
+    setSelections((current) => current.map((selection) => ({ ...selection, style })));
+    setPresetId('custom');
+    invalidate();
+  }
+
+  function recipe(seed: string): WeeklyWorksheetRecipe {
+    return {
+      schemaVersion: 'weekly-worksheet-recipe-v1',
+      title: title.trim() || 'Weekly Mathematics Practice',
+      groupLabel: groupLabel.trim() || undefined,
+      startingPointId: presetId,
+      totalQuestions,
+      selections,
+      seed,
+    };
+  }
+
+  async function responseError(response: Response): Promise<string> {
     try {
-      const res = await fetch('/api/worksheet', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Failed to generate preview');
-        setPreviewQuestions([]);
-        setPreviewOpen(false);
-        return;
-      }
-      setPreviewQuestions(data.problems || []);
-      setPreviewOpen(true);
-    } catch (e: unknown) {
-      if (e instanceof Error) {
-        setError(e.message || 'Failed to generate preview');
-      } else {
-        setError('Failed to generate preview');
-      }
-      setPreviewQuestions([]);
-      setPreviewOpen(false);
-    } finally {
-      setLoading(false);
+      const data = await response.json() as { error?: string };
+      return data.error || 'The request could not be completed.';
+    } catch {
+      return 'The request could not be completed.';
     }
   }
 
+  async function composeManifest(): Promise<WeeklyWorksheetManifest> {
+    if (manifest) return manifest;
+    const response = await fetch('/api/worksheet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(recipe(newSeed())),
+    });
+    if (!response.ok) throw new Error(await responseError(response));
+    const data = await response.json() as { manifest: WeeklyWorksheetManifest };
+    setManifest(data.manifest);
+    return data.manifest;
+  }
+
+  async function openPreview(sourceManifest?: WeeklyWorksheetManifest) {
+    setLoading('preview');
+    setError(null);
+    try {
+      const activeManifest = sourceManifest ?? await composeManifest();
+      const response = await fetch('/api/worksheet/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manifest: activeManifest }),
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      const blob = await response.blob();
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(URL.createObjectURL(blob));
+      setManifest(activeManifest);
+      setPreviewOpen(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The preview could not be opened.');
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function downloadPack() {
+    setLoading('download');
+    setError(null);
+    try {
+      const activeManifest = await composeManifest();
+      const response = await fetch('/api/worksheet/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manifest: activeManifest }),
+      });
+      if (!response.ok) throw new Error(await responseError(response));
+      downloadBlob(await response.blob(), 'PEP Weekly Mathematics Practice Pack.zip');
+      setHistory(saveWorksheetHistory(activeManifest));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The worksheet pack could not be downloaded.');
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  function loadRecipe(saved: WeeklyWorksheetManifest, exact: boolean) {
+    setTitle(saved.recipe.title);
+    setGroupLabel(saved.recipe.groupLabel ?? '');
+    setTotalQuestions(saved.recipe.totalQuestions);
+    setSelections(cloneSelections(saved.recipe.selections));
+    setPresetId('custom');
+    setManifest(exact ? saved : null);
+    setError(null);
+    plannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function reprintExact(entry: WorksheetHistoryEntry) {
+    loadRecipe(entry.manifest, true);
+    await openPreview(entry.manifest);
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="mb-2 text-gray-700">Welcome, {email}</div>
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
-        <div className="mb-4 font-semibold">Select Topics and Counts</div>
-        <table className="w-full mb-4">
-          <thead>
-            <tr className="text-left text-sm text-gray-500">
-              <th>Topic</th>
-              <th>Count</th>
-              <th>Level</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={i}>
-                <td>
-                  <select
-                    className="border rounded px-2 py-1"
-                    value={row.topic}
-                    onChange={e => updateRow(i, { ...row, topic: e.target.value })}
-                  >
-                    {allTopics.map(t => (
-                      <option key={t} value={t} disabled={rows.some((r, j) => r.topic === t && j !== i)}>
-                        {t}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    min={1}
-                    max={25 - total + row.count}
-                    className="border rounded px-2 py-1 w-16"
-                    value={row.count}
-                    onChange={e => {
-                      const v = Math.max(1, Math.min(25 - total + row.count, Number(e.target.value)));
-                      updateRow(i, { ...row, count: v });
-                    }}
-                  />
-                </td>
-                <td>
-                  <select
-                    className="border rounded px-2 py-1"
-                    value={row.level}
-                    onChange={e => updateRow(i, { ...row, level: Number(e.target.value) })}
-                  >
-                    {[1, 2, 3, 4, 5].map(l => (
-                      <option key={l} value={l}>{l}</option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  {rows.length > 1 && (
-                    <button
-                      className="text-xs text-red-500 hover:underline"
-                      onClick={() => removeRow(i)}
-                    >
-                      Remove
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <button
-          className="text-sm px-3 py-1 border rounded bg-gray-50 hover:bg-gray-100 disabled:opacity-50"
-          onClick={addRow}
-          disabled={!canAdd}
-        >
-          Add Topic
-        </button>
-        <div className="mt-6">
-          <button
-            className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-            disabled={!canPreview || loading}
-            onClick={handlePreview}
-          >
-            {loading ? 'Loading...' : 'Preview'}
-          </button>
+    <div className="builder-shell">
+      <section className="builder-hero">
+        <div>
+          <div className="hero-kicker">PEP Elementary · cumulative practice</div>
+          <h1>Build this week&apos;s mathematics review.</h1>
+          <p>
+            Choose mathematics the group has already learned. The generator creates one substantial,
+            two-page worksheet for Monday to Friday—not a timed fluency test.
+          </p>
         </div>
-        <div className="mt-2 text-xs text-gray-500">
-          Total questions: {total} (max 25)
-        </div>
-        {error && (
-          <div className="mt-4 text-sm text-red-600">{error}</div>
-        )}
-      </div>
-      {/* Modal Preview */}
-      {previewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="modal-content bg-white rounded-lg shadow-lg max-w-lg w-full p-6 relative flex flex-col" style={{ maxHeight: '80vh' }}>
-            <button
-              className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
-              onClick={() => setPreviewOpen(false)}
-              aria-label="Close preview"
-            >
-              ×
-            </button>
-            <div className="mb-4 font-semibold text-lg">Worksheet Preview</div>
-            <div className="modal-questions flex-1 overflow-y-auto mb-6 pr-2">
-              <ol start={1} className="list-decimal list-inside flex flex-col gap-2">
-                {previewQuestions.map((q) => (
-                  <li key={q.id}>
-                    <span className="font-medium">{q.Front}</span>
-                    <br />
-                    <span className="text-xs text-gray-500">Topic: {q.Topic} &nbsp;|&nbsp; Level: {q.Difficulty}</span>
-                  </li>
-                ))}
-              </ol>
+        <div className="week-ribbon" aria-label="Weekly worksheet rhythm">
+          {[
+            ['Mon', 'Receive'],
+            ['Tue', 'Begin'],
+            ['Wed', 'Continue'],
+            ['Thu', 'Check'],
+            ['Fri', 'Submit'],
+          ].map(([day, action], index) => (
+            <div className="week-ribbon-day" key={day}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <strong>{day}</strong>
+              <small>{action}</small>
             </div>
-            <div className="modal-footer flex justify-end gap-4">
-              <button
-                className="px-4 py-2 bg-blue-600 text-white rounded"
-                onClick={() => routeToPrint(previewQuestions, 'problems')}
-              >
-                Print / Save as PDF
-              </button>
-              <button
-                className="px-4 py-2 bg-gray-700 text-white rounded"
-                onClick={() => routeToPrint(previewQuestions, 'answers')}
-              >
-                Print Answers
-              </button>
-              <button
-                className="px-4 py-2 ml-2 text-gray-600 border border-gray-300 rounded"
-                onClick={() => setPreviewOpen(false)}
-              >
-                Close
+          ))}
+        </div>
+      </section>
+
+      <section className="preset-section" aria-labelledby="starting-point-heading">
+        <div className="section-heading">
+          <div>
+            <span className="section-number">01</span>
+            <h2 id="starting-point-heading">Choose a starting point</h2>
+          </div>
+          <p>Each starting point selects six sensible skills. You can change every choice below.</p>
+        </div>
+        <div className="preset-grid">
+          {WORKSHEET_PRESETS.map((preset) => (
+            <button
+              type="button"
+              key={preset.id}
+              className={`preset-card ${presetId === preset.id ? 'preset-card-active' : ''}`}
+              onClick={() => applyPreset(preset.id)}
+            >
+              <span>{preset.name}</span>
+              <small>{preset.description}</small>
+              <b>{preset.totalQuestions} questions · 2 pages</b>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div className="planner-layout" ref={plannerRef}>
+        <main className="planner-main">
+          <section className="planner-section">
+            <div className="section-heading compact-heading">
+              <div><span className="section-number">02</span><h2>Set up the week</h2></div>
+              <p>Group information is optional and remains in this browser&apos;s worksheet history.</p>
+            </div>
+            <div className="field-grid">
+              <label>
+                <span>Worksheet title</span>
+                <input value={title} onChange={(event) => { setTitle(event.target.value); invalidate(); }} maxLength={80} />
+              </label>
+              <label>
+                <span>Group label <em>optional</em></span>
+                <input value={groupLabel} onChange={(event) => { setGroupLabel(event.target.value); invalidate(); }} placeholder="e.g. Blue Group" maxLength={60} />
+              </label>
+              <label>
+                <span>Total questions</span>
+                <div className="number-control">
+                  <button type="button" onClick={() => changeTotal(totalQuestions - 1)} disabled={totalQuestions <= 8}>−</button>
+                  <input type="number" min={8} max={20} value={totalQuestions} onChange={(event) => changeTotal(Number(event.target.value))} />
+                  <button type="button" onClick={() => changeTotal(totalQuestions + 1)} disabled={totalQuestions >= 20}>+</button>
+                </div>
+                <small>8–20 questions; space-heavy choices may require fewer.</small>
+              </label>
+            </div>
+          </section>
+
+          <section className="planner-section">
+            <div className="section-heading compact-heading">
+              <div><span className="section-number">03</span><h2>Choose past skills</h2></div>
+              <p>Six is recommended for cumulative review. Choose only skills this group has already been taught.</p>
+            </div>
+
+            <div className="apply-all-bar">
+              <span>Apply to all</span>
+              <label>Band
+                <select defaultValue="core" onChange={(event) => applyAllBand(event.target.value as Band)}>
+                  <option value="support">Support</option>
+                  <option value="core">Core</option>
+                  <option value="stretch">Stretch</option>
+                </select>
+              </label>
+              <label>Question style
+                <select defaultValue="mixed" onChange={(event) => applyAllStyle(event.target.value as QuestionStyle)}>
+                  <option value="direct">Direct practice</option>
+                  <option value="applied">Applied or worded</option>
+                  <option value="mixed">Mixed</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="skill-list">
+              {selections.map((selection, index) => {
+                const skill = getSkill(selection.skillId);
+                return (
+                  <article className="skill-row" key={`${selection.skillId}-${index}`}>
+                    <div className="skill-index">{String(index + 1).padStart(2, '0')}</div>
+                    <div className="skill-controls">
+                      <label className="skill-select-label">
+                        <span>Previously taught skill</span>
+                        <select
+                          value={selection.skillId}
+                          onChange={(event) => updateSelection(index, { skillId: event.target.value })}
+                        >
+                          {domains.map(([domain, skills]) => (
+                            <optgroup label={domain} key={domain}>
+                              {skills.map((candidate) => (
+                                <option
+                                  key={candidate.id}
+                                  value={candidate.id}
+                                  disabled={selections.some((selected, selectedIndex) => selected.skillId === candidate.id && selectedIndex !== index)}
+                                >
+                                  {candidate.name}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
+                        </select>
+                        <small>{skill.description}</small>
+                      </label>
+                      <label>
+                        <span>Practice band</span>
+                        <select value={selection.band} onChange={(event) => updateSelection(index, { band: event.target.value as Band })}>
+                          <option value="support">Support</option>
+                          <option value="core">Core</option>
+                          <option value="stretch">Stretch</option>
+                        </select>
+                        <small>{BAND_COPY[selection.band]}</small>
+                      </label>
+                      <label>
+                        <span>Question style</span>
+                        <select value={selection.style} onChange={(event) => updateSelection(index, { style: event.target.value as QuestionStyle })}>
+                          <option value="direct">Direct practice</option>
+                          <option value="applied">Applied or worded</option>
+                          <option value="mixed">Mixed</option>
+                        </select>
+                        <small>{STYLE_COPY[selection.style]}</small>
+                      </label>
+                    </div>
+                    <div className="skill-count">
+                      <strong>{selection.count}</strong>
+                      <span>{selection.count === 1 ? 'question' : 'questions'}</span>
+                      {selections.length > 1 && <button type="button" onClick={() => removeSkill(index)}>Remove</button>}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <button type="button" className="add-skill-button" onClick={addSkill} disabled={selections.length >= 8 || selections.length >= totalQuestions}>
+              + Add another skill
+            </button>
+          </section>
+        </main>
+
+        <aside className="review-card">
+          <div className="review-status"><span></span>{isValid ? 'Ready to preview' : 'Check the settings'}</div>
+          <h2>Your weekly sheet</h2>
+          <div className="review-stats">
+            <div><strong>{totalQuestions}</strong><span>questions</span></div>
+            <div><strong>{selections.length}</strong><span>skills</span></div>
+            <div><strong>2</strong><span>pages</span></div>
+          </div>
+          <div className="review-list">
+            {selections.map((selection) => (
+              <div key={selection.skillId}>
+                <span>{getSkill(selection.skillId).name}</span>
+                <b>{selection.count}Q · {selection.band}</b>
+              </div>
+            ))}
+          </div>
+          {shallowSkills > 0 && (
+            <div className="review-warning">{shallowSkills} {shallowSkills === 1 ? 'skill has' : 'skills have'} only one question. That is broad retrieval rather than sustained practice.</div>
+          )}
+          {equipment.length > 0 && <div className="equipment-note">Students will need: {equipment.join(', ')}.</div>}
+          {error && <div className="error-message" role="alert">{error}</div>}
+          <button type="button" className="primary-action" onClick={() => openPreview()} disabled={!isValid || loading !== null}>
+            {loading === 'preview' ? 'Preparing preview…' : 'Preview student PDF'}
+          </button>
+          <button type="button" className="secondary-action" onClick={downloadPack} disabled={!isValid || loading !== null}>
+            {loading === 'download' ? 'Building pack…' : 'Download worksheet + key'}
+          </button>
+          <p className="action-note">Preview first. Downloads are saved to chronological history; previews are not.</p>
+        </aside>
+      </div>
+
+      <section className="history-section">
+        <div className="section-heading">
+          <div><span className="section-number">04</span><h2>Recent worksheets</h2></div>
+          <p>Reprint the identical questions or reuse the setup with fresh variants.</p>
+        </div>
+        {history.length === 0 ? (
+          <div className="history-empty">Your downloaded worksheets will appear here in chronological order.</div>
+        ) : (
+          <div className="history-list">
+            {history.map((entry) => (
+              <article className="history-item" key={entry.id}>
+                <div>
+                  <time>{new Date(entry.generatedAt).toLocaleString()}</time>
+                  <h3>{entry.manifest.recipe.groupLabel || entry.manifest.recipe.title}</h3>
+                  <p>{entry.manifest.recipe.selections.map((selection) => getSkill(selection.skillId).name).join(' · ')}</p>
+                </div>
+                <div className="history-actions">
+                  <button type="button" onClick={() => reprintExact(entry)}>Reprint exact sheet</button>
+                  <button type="button" onClick={() => loadRecipe(entry.manifest, false)}>Reuse setup with fresh questions</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {previewOpen && previewUrl && (
+        <div className="preview-overlay" role="dialog" aria-modal="true" aria-label="Student worksheet preview">
+          <div className="preview-modal">
+            <div className="preview-header">
+              <div><span>Student-facing PDF</span><h2>Two-page print preview</h2></div>
+              <button type="button" onClick={() => setPreviewOpen(false)} aria-label="Close preview">×</button>
+            </div>
+            <iframe src={previewUrl} title="Student worksheet PDF preview" />
+            <div className="preview-footer">
+              <p>The complete download includes this worksheet, a teacher answer key, and the reusable worksheet record.</p>
+              <button type="button" className="secondary-action" onClick={() => setPreviewOpen(false)}>Continue editing</button>
+              <button type="button" className="primary-action" onClick={downloadPack} disabled={loading !== null}>
+                {loading === 'download' ? 'Building pack…' : 'Download worksheet + key'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <div className="signed-in-note">Signed in as {email}</div>
     </div>
   );
-} 
+}

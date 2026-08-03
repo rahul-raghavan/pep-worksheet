@@ -1,27 +1,31 @@
 import { auth, signOut } from '@/auth';
+import { isPrivateAdminEmail } from '@/lib/access';
 import BuilderClient from './BuilderClient';
 
 export default async function Builder() {
   const session = await auth();
+  const canViewUsage = isPrivateAdminEmail(session?.user?.email);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="w-full max-w-xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Worksheet Builder</h1>
+    <main className="app-page">
+      <header className="app-header">
+        <a className="brand-lockup" href="/builder" aria-label="PEP Worksheet Generator home">
+          <span className="brand-mark">P</span>
+          <span><strong>PEP Worksheet Generator</strong><small>Elementary mathematics</small></span>
+        </a>
+        <nav className="app-header-actions" aria-label="Account">
+          {canViewUsage && <a href="/admin/usage">Download tracker</a>}
           <form
             action={async () => {
               'use server';
               await signOut();
             }}
           >
-            <button className="text-sm text-gray-500 hover:text-gray-700">
-              Sign out
-            </button>
+            <button className="sign-out-button">Sign out</button>
           </form>
-        </div>
-        <BuilderClient email={session?.user?.email || ''} />
-      </div>
+        </nav>
+      </header>
+      <BuilderClient email={session?.user?.email || ''} />
     </main>
   );
-} 
+}

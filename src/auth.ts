@@ -1,16 +1,6 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
-
-// For development only - in production, use environment variable
-const AUTH_SECRET = 'Ju29iap95D8UiynYOFFs7MCAMzTsNAIlU20L8A7NeyA=';
-
-// Debug: Log environment variables
-console.log('Auth Config:', {
-  hasClientId: !!process.env.GOOGLE_CLIENT_ID,
-  hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-  clientIdLength: process.env.GOOGLE_CLIENT_ID?.length,
-  clientSecretLength: process.env.GOOGLE_CLIENT_SECRET?.length,
-});
+import { isAllowedEmail } from '@/lib/access';
 
 const googleProvider = Google({
   clientId: process.env.GOOGLE_CLIENT_ID || '',
@@ -33,14 +23,14 @@ export const {
   signOut,
 } = NextAuth({
   providers: [googleProvider],
-  secret: AUTH_SECRET,
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+  trustHost: true,
   callbacks: {
     async signIn({ account, profile }) {
       if (account?.provider === 'google') {
         const email = profile?.email;
-        return (
-          email?.endsWith('@pepschoolv2.com') || email?.endsWith('@accelschool.in') || email === 'rahul.glass@gmail.com'
-        );
+        const emailVerified = (profile as { email_verified?: boolean } | undefined)?.email_verified;
+        return emailVerified !== false && isAllowedEmail(email);
       }
       return false;
     },
@@ -57,4 +47,4 @@ export const {
   pages: {
     signIn: '/sign-in',
   },
-}); 
+});
