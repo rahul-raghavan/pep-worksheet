@@ -6,7 +6,7 @@ import {
   describeProblemSet,
   loadUsageReport,
   summarizeUsageEvents,
-  type WorksheetDownloadEvent,
+  type WorksheetUsageEvent,
 } from '@/lib/usage';
 
 function manifest() {
@@ -22,7 +22,7 @@ function manifest() {
   });
 }
 
-function event(overrides: Partial<WorksheetDownloadEvent> = {}): WorksheetDownloadEvent {
+function event(overrides: Partial<WorksheetUsageEvent> = {}): WorksheetUsageEvent {
   return {
     id: 'event-1',
     user_id: 'google-user-1',
@@ -65,12 +65,15 @@ describe('privacy-minimal worksheet usage reporting', () => {
     expect(description).not.toHaveProperty('groupLabel');
   });
 
-  it('summarizes downloads by teacher and problem-set type', () => {
+  it('counts each worksheet once while reporting complete-pack downloads separately', () => {
     const report = summarizeUsageEvents([
-      event(),
+      event({ event_type: 'weekly_worksheet_created' }),
+      event({ id: 'event-1-pack' }),
       event({
         id: 'event-2',
+        user_id: 'google-user-2',
         teacher_email: 'teacher@accelschool.in',
+        manifest_id: 'manifest-2',
         starting_point_id: 'custom',
         total_questions: 10,
         skill_summary: [{ skillId: 'long-division', skillName: 'Long division', questionCount: 10 }],
@@ -80,16 +83,17 @@ describe('privacy-minimal worksheet usage reporting', () => {
     ]);
 
     expect(report.status).toBe('connected');
-    expect(report.totalDownloads).toBe(2);
+    expect(report.worksheetsCreated).toBe(2);
+    expect(report.packDownloads).toBe(2);
     expect(report.activeTeachers).toBe(2);
     expect(report.teachers).toEqual(expect.arrayContaining([
-      expect.objectContaining({ email: 'teacher@accelschool.in', downloads: 1, questions: 10 }),
-      expect.objectContaining({ email: 'teacher@pepschoolv2.com', downloads: 1, questions: 12 }),
+      expect.objectContaining({ email: 'teacher@accelschool.in', worksheets: 1, packDownloads: 1, questions: 10 }),
+      expect.objectContaining({ email: 'teacher@pepschoolv2.com', worksheets: 1, packDownloads: 1, questions: 12 }),
     ]));
-    expect(report.skills[0]).toMatchObject({ id: 'long-division', downloads: 2, questions: 15 });
+    expect(report.skills[0]).toMatchObject({ id: 'long-division', count: 2, questions: 15 });
     expect(report.startingPoints).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'custom', downloads: 1 }),
-      expect.objectContaining({ id: 'weekly-cumulative', downloads: 1 }),
+      expect.objectContaining({ id: 'custom', count: 1 }),
+      expect.objectContaining({ id: 'weekly-cumulative', count: 1 }),
     ]));
   });
 });
@@ -141,5 +145,21 @@ describe('Supabase usage-tracking configuration', () => {
         headers: { apikey: 'sb_secret_server_only_test' },
       }),
     );
+  });
+
+  it('accepts PostgreSQL timestamps containing an explicit UTC offset', async () => {
+    process.env.SUPABASE_SECRET_KEY = 'sb_secret_server_only_test';
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify([
+      event({ created_at: '2026-08-03T11:35:47.123456+00:00' }),
+    ]), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+
+    const report = await loadUsageReport();
+
+    expect(report.status).toBe('connected');
+    expect(report.worksheetsCreated).toBe(1);
+    expect(report.packDownloads).toBe(1);
   });
 });

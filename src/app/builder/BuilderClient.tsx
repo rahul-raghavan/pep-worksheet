@@ -88,6 +88,7 @@ export default function BuilderClient({ email }: { email: string }) {
   const [search, setSearch] = useState('');
   const [manifest, setManifest] = useState<WeeklyWorksheetManifest | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFilename, setPreviewFilename] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [loading, setLoading] = useState<'preview' | 'download' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -230,8 +231,11 @@ export default function BuilderClient({ email }: { email: string }) {
       });
       if (!response.ok) throw new Error(await responseError(response));
       const blob = await response.blob();
+      const filename = response.headers.get('X-Download-Filename')
+        || 'PEP Weekly Mathematics Practice.pdf';
       if (previewUrl) URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(URL.createObjectURL(blob));
+      setPreviewUrl(URL.createObjectURL(new File([blob], filename, { type: 'application/pdf' })));
+      setPreviewFilename(filename);
       setManifest(activeManifest);
       setPreviewOpen(true);
     } catch (caught) {
@@ -252,13 +256,25 @@ export default function BuilderClient({ email }: { email: string }) {
         body: JSON.stringify({ manifest: activeManifest }),
       });
       if (!response.ok) throw new Error(await responseError(response));
-      downloadBlob(await response.blob(), 'PEP Weekly Mathematics Practice Pack.zip');
+      const filename = response.headers.get('X-Download-Filename')
+        || 'PEP Weekly Mathematics Practice - Complete Pack.zip';
+      downloadBlob(await response.blob(), filename);
       setHistory(saveWorksheetHistory(activeManifest));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The worksheet pack could not be downloaded.');
     } finally {
       setLoading(null);
     }
+  }
+
+  function downloadStudentPdf() {
+    if (!previewUrl || !previewFilename) return;
+    const anchor = document.createElement('a');
+    anchor.href = previewUrl;
+    anchor.download = previewFilename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   }
 
   function loadRecipe(saved: WeeklyWorksheetManifest, exact: boolean) {
@@ -513,7 +529,7 @@ export default function BuilderClient({ email }: { email: string }) {
           <button type="button" className="secondary-action" onClick={downloadPack} disabled={!isValid || loading !== null}>
             {loading === 'download' ? 'Building pack…' : 'Download worksheet + key'}
           </button>
-          <p className="action-note">Preview shows the exact precise skills and questions selected from any mixed family. Previews are not counted as downloads.</p>
+          <p className="action-note">Preview shows the exact skills and questions selected from any mixed family. Each distinct worksheet is counted once in the private usage tracker; complete-pack downloads are shown separately.</p>
         </aside>
       </div>
 
@@ -554,6 +570,7 @@ export default function BuilderClient({ email }: { email: string }) {
             <div className="preview-footer">
               <p>The complete download includes this worksheet, a teacher answer key, and the reusable worksheet record.</p>
               <button type="button" className="secondary-action" onClick={() => setPreviewOpen(false)}>Continue editing</button>
+              <button type="button" className="secondary-action" onClick={downloadStudentPdf}>Download student PDF</button>
               <button type="button" className="primary-action" onClick={downloadPack} disabled={loading !== null}>
                 {loading === 'download' ? 'Building pack…' : 'Download worksheet + key'}
               </button>

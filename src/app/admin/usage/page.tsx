@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { auth, signOut } from '@/auth';
 import { isPrivateAdminEmail } from '@/lib/access';
-import { loadUsageReport, type WorksheetDownloadEvent } from '@/lib/usage';
+import { loadUsageReport, type WorksheetUsageEvent } from '@/lib/usage';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,10 +13,16 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-function problemSetDescription(event: WorksheetDownloadEvent): string {
+function problemSetDescription(event: WorksheetUsageEvent): string {
   return event.skill_summary
     .map((skill) => `${skill.skillName} (${skill.questionCount})`)
     .join(' · ');
+}
+
+function activityLabel(event: WorksheetUsageEvent): string {
+  return event.event_type === 'weekly_worksheet_pack_downloaded'
+    ? 'Complete pack downloaded'
+    : 'Student PDF created';
 }
 
 function summaryText(summary: Record<string, number>, label: (key: string) => string = (key) => key): string {
@@ -55,9 +61,10 @@ export default async function UsagePage() {
         <section className="usage-heading">
           <div>
             <div className="hero-kicker">Private administrator view</div>
-            <h1>Worksheet download tracker</h1>
+            <h1>Worksheet usage tracker</h1>
             <p>
-              This counts successfully generated download packs. PDF previews and failed generations are not counted.
+              Each distinct student worksheet is counted once, whether it was first created through Preview or a complete-pack download.
+              Complete-pack downloads are counted separately. Failed generations are not counted.
               No student names, group labels, questions or answers are stored.
             </p>
           </div>
@@ -73,33 +80,35 @@ export default async function UsagePage() {
         )}
 
         <section className="usage-stat-grid" aria-label="Usage totals">
-          <article><strong>{report.totalDownloads}</strong><span>successful downloads</span></article>
-          <article><strong>{report.activeTeachers}</strong><span>teachers who downloaded</span></article>
-          <article><strong>{report.downloadsLast7Days}</strong><span>downloads in the last 7 days</span></article>
+          <article><strong>{report.worksheetsCreated}</strong><span>distinct worksheets created</span></article>
+          <article><strong>{report.packDownloads}</strong><span>complete packs downloaded</span></article>
+          <article><strong>{report.activeTeachers}</strong><span>teachers who created worksheets</span></article>
+          <article><strong>{report.worksheetsLast7Days}</strong><span>new worksheets in the last 7 days</span></article>
         </section>
 
-        {report.status === 'connected' && report.totalDownloads === 0 && (
-          <div className="usage-empty">Tracking is connected. The first successful worksheet-pack download will appear here.</div>
+        {report.status === 'connected' && report.worksheetsCreated === 0 && (
+          <div className="usage-empty">Tracking is connected. The first successful preview or complete-pack download will appear here.</div>
         )}
 
-        {report.totalDownloads > 0 && (
+        {report.worksheetsCreated > 0 && (
           <>
             <section className="usage-panel">
               <div className="section-heading">
                 <div><span className="section-number">01</span><h2>Use by teacher</h2></div>
-                <p>Downloads measure generated packs, not whether a worksheet was printed or completed.</p>
+                <p>A worksheet is counted once per exact question set. Complete-pack downloads remain a separate measure.</p>
               </div>
               <div className="usage-table-wrap">
                 <table className="usage-table">
-                  <thead><tr><th>Teacher</th><th>Downloads</th><th>Questions generated</th><th>Most-used skills</th><th>Latest</th></tr></thead>
+                  <thead><tr><th>Teacher</th><th>Worksheets</th><th>Complete packs</th><th>Questions generated</th><th>Most-used skills</th><th>Latest</th></tr></thead>
                   <tbody>
                     {report.teachers.map((teacher) => (
                       <tr key={teacher.email}>
                         <td><strong>{teacher.email}</strong></td>
-                        <td>{teacher.downloads}</td>
+                        <td>{teacher.worksheets}</td>
+                        <td>{teacher.packDownloads}</td>
                         <td>{teacher.questions}</td>
                         <td>{teacher.topSkills.join(' · ')}</td>
-                        <td>{formatDate(teacher.lastDownload)}</td>
+                        <td>{formatDate(teacher.lastActivity)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -111,25 +120,25 @@ export default async function UsagePage() {
               <article className="usage-panel">
                 <h2>Practice bands generated</h2>
                 <p>Counts questions at Support, Core and Stretch rather than whole downloads.</p>
-                <ol>{report.bands.map((item) => <li key={item.id}><span>{item.name}</span><strong>{item.downloads}</strong></li>)}</ol>
+                <ol>{report.bands.map((item) => <li key={item.id}><span>{item.name}</span><strong>{item.count}</strong></li>)}</ol>
               </article>
               <article className="usage-panel">
                 <h2>Question styles generated</h2>
-                <p>Counts direct and applied questions in completed packs.</p>
-                <ol>{report.styles.map((item) => <li key={item.id}><span>{item.name}</span><strong>{item.downloads}</strong></li>)}</ol>
+                <p>Counts direct and applied questions across distinct worksheets.</p>
+                <ol>{report.styles.map((item) => <li key={item.id}><span>{item.name}</span><strong>{item.count}</strong></li>)}</ol>
               </article>
             </section>
 
             <section className="usage-panel">
               <div className="section-heading">
                 <div><span className="section-number">02</span><h2>Skills selected</h2></div>
-                <p>“Packs” is how many downloaded worksheets contained the skill; “questions” is its total practice volume.</p>
+                <p>“Sheets” is how many distinct worksheets contained the skill; “questions” is its total practice volume.</p>
               </div>
               <div className="usage-skill-grid">
                 {report.skills.map((skill) => (
                   <article key={skill.id}>
                     <strong>{skill.name}</strong>
-                    <span>{skill.downloads} packs · {skill.questions} questions</span>
+                    <span>{skill.count} sheets · {skill.questions} questions</span>
                   </article>
                 ))}
               </div>
@@ -137,17 +146,18 @@ export default async function UsagePage() {
 
             <section className="usage-panel">
               <div className="section-heading">
-                <div><span className="section-number">03</span><h2>Recent downloads</h2></div>
-                <p>The latest 50 successful pack generations, newest first.</p>
+                <div><span className="section-number">03</span><h2>Recent activity</h2></div>
+                <p>The latest 50 successful student-PDF creations and complete-pack downloads, newest first.</p>
               </div>
               <div className="usage-table-wrap">
                 <table className="usage-table usage-recent-table">
-                  <thead><tr><th>When</th><th>Teacher</th><th>Problem set</th><th>Band and style</th></tr></thead>
+                  <thead><tr><th>When</th><th>Teacher</th><th>Action</th><th>Problem set</th><th>Band and style</th></tr></thead>
                   <tbody>
                     {report.recent.map((event) => (
                       <tr key={event.id}>
                         <td>{formatDate(event.created_at)}</td>
                         <td>{event.teacher_email}</td>
+                        <td><strong>{activityLabel(event)}</strong></td>
                         <td><strong>{event.total_questions} questions</strong><small>{problemSetDescription(event)}</small></td>
                         <td>
                           <span>{summaryText(event.band_summary)}</span>

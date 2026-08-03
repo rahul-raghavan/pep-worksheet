@@ -4,7 +4,7 @@ import { auth } from '@/auth';
 import { isAllowedEmail, normalizeEmail } from '@/lib/access';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { recordWorksheetDownload } from '@/lib/usage';
-import { renderWorksheetPack } from '@/lib/worksheet/pack';
+import { renderWorksheetPack, worksheetArtifactNames } from '@/lib/worksheet/pack';
 import { WeeklyWorksheetManifestSchema } from '@/lib/worksheet/schema';
 
 export const dynamic = 'force-dynamic';
@@ -25,7 +25,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const manifest = WeeklyWorksheetManifestSchema.parse(body.manifest);
-    const zip = await renderWorksheetPack(manifest);
+    const generatedAt = new Date();
+    const names = worksheetArtifactNames(manifest, generatedAt);
+    const zip = await renderWorksheetPack(manifest, generatedAt);
     const tracking = await recordWorksheetDownload({
       manifest,
       userId: session?.user?.id || normalizedEmail,
@@ -34,9 +36,10 @@ export async function POST(request: Request) {
     return new Response(new Uint8Array(zip), {
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="PEP Weekly Mathematics Practice Pack.zip"',
+        'Content-Disposition': `attachment; filename="${names.completePackZip}"`,
         'Cache-Control': 'no-store',
         'X-Usage-Tracking': tracking.status,
+        'X-Download-Filename': names.completePackZip,
       },
     });
   } catch (error) {

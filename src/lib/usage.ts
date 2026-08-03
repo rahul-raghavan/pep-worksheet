@@ -4,6 +4,9 @@ import { z } from 'zod';
 const EVENT_TABLE = 'worksheet_download_events';
 
 export type UsageTrackingStatus = 'recorded' | 'not_configured' | 'failed';
+export type WorksheetUsageEventType =
+  | 'weekly_worksheet_created'
+  | 'weekly_worksheet_pack_downloaded';
 
 export interface SkillUsageSummary {
   skillId: string;
@@ -13,11 +16,11 @@ export interface SkillUsageSummary {
   questionCount: number;
 }
 
-export interface WorksheetDownloadEvent {
+export interface WorksheetUsageEvent {
   id: string;
   user_id: string;
   teacher_email: string;
-  event_type: 'weekly_worksheet_pack_downloaded';
+  event_type: WorksheetUsageEventType;
   tool_mode: 'weekly_mixed_review';
   manifest_id: string;
   starting_point_id: string;
@@ -38,31 +41,33 @@ export interface UsageTrackingResult {
 
 export interface TeacherUsageSummary {
   email: string;
-  downloads: number;
+  worksheets: number;
+  packDownloads: number;
   questions: number;
-  lastDownload: string;
+  lastActivity: string;
   topSkills: string[];
 }
 
 export interface NamedUsageCount {
   id: string;
   name: string;
-  downloads: number;
+  count: number;
   questions?: number;
 }
 
 export interface UsageReport {
   status: Exclude<UsageTrackingStatus, 'recorded'> | 'connected';
   detail?: string;
-  totalDownloads: number;
+  worksheetsCreated: number;
+  packDownloads: number;
   activeTeachers: number;
-  downloadsLast7Days: number;
+  worksheetsLast7Days: number;
   teachers: TeacherUsageSummary[];
   startingPoints: NamedUsageCount[];
   skills: NamedUsageCount[];
   bands: NamedUsageCount[];
   styles: NamedUsageCount[];
-  recent: WorksheetDownloadEvent[];
+  recent: WorksheetUsageEvent[];
 }
 
 const SkillUsageSummarySchema = z.object({
@@ -73,11 +78,16 @@ const SkillUsageSummarySchema = z.object({
   questionCount: z.number().int().nonnegative(),
 });
 
-const WorksheetDownloadEventSchema = z.object({
+const DatabaseTimestampSchema = z.string().refine(
+  (value) => Number.isFinite(Date.parse(value)),
+  { message: 'Invalid database timestamp' },
+);
+
+const WorksheetUsageEventSchema = z.object({
   id: z.string(),
   user_id: z.string(),
   teacher_email: z.string(),
-  event_type: z.literal('weekly_worksheet_pack_downloaded'),
+  event_type: z.enum(['weekly_worksheet_created', 'weekly_worksheet_pack_downloaded']),
   tool_mode: z.literal('weekly_mixed_review'),
   manifest_id: z.string(),
   starting_point_id: z.string(),
@@ -88,7 +98,10 @@ const WorksheetDownloadEventSchema = z.object({
   style_summary: z.record(z.string(), z.number().int().nonnegative()),
   kind_summary: z.record(z.string(), z.number().int().nonnegative()),
   application_version: z.string(),
-  created_at: z.string().datetime(),
+  // PostgREST returns PostgreSQL timestamps with an explicit +00:00 offset.
+  // Date.parse accepts that valid form whereas z.string().datetime() rejects it
+  // unless offset handling is enabled.
+  created_at: DatabaseTimestampSchema,
 });
 
 type SupabaseConfigResult =
@@ -197,10 +210,11 @@ export function describeProblemSet(manifest: WeeklyWorksheetManifest) {
   };
 }
 
-export async function recordWorksheetDownload(input: {
+async function recordWorksheetUsage(input: {
   manifest: WeeklyWorksheetManifest;
   userId: string;
   teacherEmail: string;
+  eventType: WorksheetUsageEventType;
 }): Promise<UsageTrackingResult> {
   const config = supabaseConfig();
   if (config.status !== 'ready') {
@@ -214,7 +228,7 @@ export async function recordWorksheetDownload(input: {
   const event = {
     user_id: input.userId,
     teacher_email: input.teacherEmail.trim().toLowerCase(),
-    event_type: 'weekly_worksheet_pack_downloaded',
+    event_type: input.eventType,
     tool_mode: 'weekly_mixed_review',
     manifest_id: input.manifest.manifestId,
     starting_point_id: summary.startingPointId,
@@ -240,24 +254,47 @@ export async function recordWorksheetDownload(input: {
     });
     if (!response.ok) {
       const detail = supabaseFailureDetail(response.status, await response.text());
-      console.error('worksheet_download_tracking_failed', { detail, manifestId: input.manifest.manifestId });
+      console.error('worksheet_usage_tracking_failed', {
+        detail,
+        eventType: input.eventType,
+        manifestId: input.manifest.manifestId,
+      });
       return { status: 'failed', detail };
     }
     return { status: 'recorded' };
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Unknown tracking error';
-    console.error('worksheet_download_tracking_failed', { detail, manifestId: input.manifest.manifestId });
+    console.error('worksheet_usage_tracking_failed', {
+      detail,
+      eventType: input.eventType,
+      manifestId: input.manifest.manifestId,
+    });
     return { status: 'failed', detail };
   }
+}
+
+type WorksheetUsageInput = {
+  manifest: WeeklyWorksheetManifest;
+  userId: string;
+  teacherEmail: string;
+};
+
+export function recordWorksheetCreated(input: WorksheetUsageInput): Promise<UsageTrackingResult> {
+  return recordWorksheetUsage({ ...input, eventType: 'weekly_worksheet_created' });
+}
+
+export function recordWorksheetDownload(input: WorksheetUsageInput): Promise<UsageTrackingResult> {
+  return recordWorksheetUsage({ ...input, eventType: 'weekly_worksheet_pack_downloaded' });
 }
 
 function emptyReport(status: 'not_configured' | 'failed', detail: string): UsageReport {
   return {
     status,
     detail,
-    totalDownloads: 0,
+    worksheetsCreated: 0,
+    packDownloads: 0,
     activeTeachers: 0,
-    downloadsLast7Days: 0,
+    worksheetsLast7Days: 0,
     teachers: [],
     startingPoints: [],
     skills: [],
@@ -271,33 +308,45 @@ function titleCase(value: string): string {
   return value.replace(/-/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-export function summarizeUsageEvents(events: WorksheetDownloadEvent[]): UsageReport {
+export function summarizeUsageEvents(events: WorksheetUsageEvent[]): UsageReport {
   const teacherMap = new Map<string, {
-    downloads: number;
+    worksheets: number;
+    packDownloads: number;
     questions: number;
-    lastDownload: string;
+    lastActivity: string;
     skills: Map<string, number>;
   }>();
   const startingPointMap = new Map<string, number>();
-  const skillMap = new Map<string, { name: string; downloads: number; questions: number }>();
+  const skillMap = new Map<string, { name: string; worksheets: number; questions: number }>();
   const bandMap = new Map<string, number>();
   const styleMap = new Map<string, number>();
   const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
-  events.forEach((event) => {
+  // A preview and a subsequent complete-pack download refer to the same exact
+  // worksheet manifest. Count that worksheet once while preserving every pack
+  // download as a separate, higher-intent action.
+  const uniqueWorksheets = new Map<string, WorksheetUsageEvent>();
+  [...events]
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .forEach((event) => {
+      const key = `${event.user_id}:${event.manifest_id}`;
+      if (!uniqueWorksheets.has(key)) uniqueWorksheets.set(key, event);
+    });
+
+  uniqueWorksheets.forEach((event) => {
     const teacher = teacherMap.get(event.teacher_email) ?? {
-      downloads: 0,
+      worksheets: 0,
+      packDownloads: 0,
       questions: 0,
-      lastDownload: event.created_at,
+      lastActivity: event.created_at,
       skills: new Map<string, number>(),
     };
-    teacher.downloads += 1;
+    teacher.worksheets += 1;
     teacher.questions += event.total_questions;
-    if (event.created_at > teacher.lastDownload) teacher.lastDownload = event.created_at;
     event.skill_summary.forEach((skill) => {
       teacher.skills.set(skill.skillName, (teacher.skills.get(skill.skillName) ?? 0) + skill.questionCount);
-      const overall = skillMap.get(skill.skillId) ?? { name: skill.skillName, downloads: 0, questions: 0 };
-      overall.downloads += 1;
+      const overall = skillMap.get(skill.skillId) ?? { name: skill.skillName, worksheets: 0, questions: 0 };
+      overall.worksheets += 1;
       overall.questions += skill.questionCount;
       skillMap.set(skill.skillId, overall);
     });
@@ -308,37 +357,52 @@ export function summarizeUsageEvents(events: WorksheetDownloadEvent[]): UsageRep
     Object.entries(event.style_summary).forEach(([style, count]) => styleMap.set(style, (styleMap.get(style) ?? 0) + count));
   });
 
-  const descending = (a: NamedUsageCount, b: NamedUsageCount) => b.downloads - a.downloads || a.name.localeCompare(b.name);
+  events.forEach((event) => {
+    const teacher = teacherMap.get(event.teacher_email);
+    if (!teacher) return;
+    if (event.event_type === 'weekly_worksheet_pack_downloaded') teacher.packDownloads += 1;
+    if (new Date(event.created_at).getTime() > new Date(teacher.lastActivity).getTime()) {
+      teacher.lastActivity = event.created_at;
+    }
+  });
+
+  const descending = (a: NamedUsageCount, b: NamedUsageCount) => b.count - a.count || a.name.localeCompare(b.name);
   const teachers = [...teacherMap.entries()].map(([email, teacher]) => ({
     email,
-    downloads: teacher.downloads,
+    worksheets: teacher.worksheets,
+    packDownloads: teacher.packDownloads,
     questions: teacher.questions,
-    lastDownload: teacher.lastDownload,
+    lastActivity: teacher.lastActivity,
     topSkills: [...teacher.skills.entries()]
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .slice(0, 3)
       .map(([name]) => name),
-  })).sort((a, b) => b.downloads - a.downloads || a.email.localeCompare(b.email));
+  })).sort((a, b) => b.worksheets - a.worksheets || a.email.localeCompare(b.email));
+
+  const worksheetEvents = [...uniqueWorksheets.values()];
 
   return {
     status: 'connected',
-    totalDownloads: events.length,
+    worksheetsCreated: worksheetEvents.length,
+    packDownloads: events.filter((event) => event.event_type === 'weekly_worksheet_pack_downloaded').length,
     activeTeachers: teacherMap.size,
-    downloadsLast7Days: events.filter((event) => new Date(event.created_at).getTime() >= sevenDaysAgo).length,
+    worksheetsLast7Days: worksheetEvents.filter((event) => new Date(event.created_at).getTime() >= sevenDaysAgo).length,
     teachers,
     startingPoints: [...startingPointMap.entries()]
-      .map(([id, downloads]) => ({ id, name: id === 'custom' ? 'Custom setup' : titleCase(id), downloads }))
+      .map(([id, count]) => ({ id, name: id === 'custom' ? 'Custom setup' : titleCase(id), count }))
       .sort(descending),
     skills: [...skillMap.entries()]
-      .map(([id, value]) => ({ id, name: value.name, downloads: value.downloads, questions: value.questions }))
+      .map(([id, value]) => ({ id, name: value.name, count: value.worksheets, questions: value.questions }))
       .sort((a, b) => (b.questions ?? 0) - (a.questions ?? 0) || a.name.localeCompare(b.name)),
     bands: [...bandMap.entries()]
-      .map(([id, downloads]) => ({ id, name: titleCase(id), downloads }))
+      .map(([id, count]) => ({ id, name: titleCase(id), count }))
       .sort(descending),
     styles: [...styleMap.entries()]
-      .map(([id, downloads]) => ({ id, name: id === 'applied' ? 'Applied or worded' : titleCase(id), downloads }))
+      .map(([id, count]) => ({ id, name: id === 'applied' ? 'Applied or worded' : titleCase(id), count }))
       .sort(descending),
-    recent: [...events].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 50),
+    recent: [...events]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 50),
   };
 }
 
@@ -370,7 +434,7 @@ export async function loadUsageReport(): Promise<UsageReport> {
       console.error('worksheet_usage_report_failed', { detail });
       return emptyReport('failed', detail);
     }
-    return summarizeUsageEvents(WorksheetDownloadEventSchema.array().parse(await response.json()));
+    return summarizeUsageEvents(WorksheetUsageEventSchema.array().parse(await response.json()));
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'Unknown usage-report error';
     console.error('worksheet_usage_report_failed', { detail });

@@ -53,11 +53,12 @@ Set `NEXTAUTH_URL` to the matching site origin in each environment. Vercel produ
 
 ## Download tracking
 
-Successful worksheet-pack generations can be recorded in Supabase. Previews and failed generations are deliberately not counted. The event contains the signed-in teacher email, timestamp, starting point, question count, and aggregate skill, band, and style counts. It never stores group labels, worksheet titles, seeds, generated questions, answers, or student information.
+Successful student-PDF creations and complete-pack downloads can be recorded in Supabase. The dashboard counts each distinct worksheet manifest once and reports complete-pack downloads separately; repeated previews of the same exact worksheet do not inflate the worksheet total. Failed generations are deliberately not counted. Events contain the signed-in teacher email, timestamp, question count, and aggregate skill, band, and style counts. They never store group labels, worksheet titles, seeds, generated questions, answers, or student information.
 
 1. Create or choose a Supabase project.
 2. Run [`supabase/migrations/202608020001_create_worksheet_download_events.sql`](supabase/migrations/202608020001_create_worksheet_download_events.sql) in the Supabase SQL editor.
-3. Add these server-side environment variables locally and in Vercel:
+3. Run [`supabase/migrations/202608030002_add_worksheet_created_events.sql`](supabase/migrations/202608030002_add_worksheet_created_events.sql) to enable separate student-PDF creation events.
+4. Add these server-side environment variables locally and in Vercel:
 
 ```text
 SUPABASE_URL=https://YOUR-PROJECT.supabase.co
@@ -67,9 +68,9 @@ PRIVATE_ADMIN_EMAILS=rahul@pepschoolv2.com
 
 Use a Supabase Secret key beginning `sb_secret_...`. A legacy `service_role` JWT may instead be supplied as `SUPABASE_SERVICE_ROLE_KEY`; never put the public anon/publishable key in either variable. Privileged keys must never use a `NEXT_PUBLIC_` prefix. The event table has RLS enabled and grants no browser access to ordinary authenticated or anonymous clients. Only the server writes events and reads the private report.
 
-The private tracker is available at `/admin/usage` to the configured administrator emails. A visible status distinguishes a working connection with zero downloads from missing configuration or a failed Supabase query. Tracking failures do not block a teacher from receiving a completed worksheet pack.
+The private tracker is available at `/admin/usage` to the configured administrator emails. A visible status distinguishes a working connection with zero activity from missing configuration or a failed Supabase query. Tracking failures do not block a teacher from receiving a preview or completed worksheet pack.
 
-After deployment, sign in as a teacher, preview once, and download once. Then sign in as the private administrator and confirm the tracker shows exactly one event; the preview should not appear.
+After deployment, sign in as a teacher, preview once, and download the complete pack once. Then sign in as the private administrator and confirm the tracker shows one distinct worksheet and one complete-pack download.
 
 ## Commands
 
